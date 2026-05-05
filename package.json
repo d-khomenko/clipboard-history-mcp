@@ -21,7 +21,7 @@
   "dependencies": {
     "@iarna/toml": "^3.0.0",
     "@modelcontextprotocol/sdk": "^1.0.4",
-    "better-sqlite3": "^11.7.0",
+    "better-sqlite3": "^12.9.0",
     "commander": "^12.1.0",
     "flourite": "^1.2.4"
   },
