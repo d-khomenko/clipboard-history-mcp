@@ -1,0 +1,84 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CARGO_TERM_COLOR: always
+  BINARY_NAME: clipboard-history-mcp
+
+jobs:
+  build-macos:
+    name: Build macOS universal binary
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable (both targets)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Cache Cargo registry + build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-release-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-release-cargo-
+
+      - name: Build aarch64
+        run: cargo build --release --target aarch64-apple-darwin
+
+      - name: Build x86_64
+        run: cargo build --release --target x86_64-apple-darwin
+
+      - name: Create universal binary
+        run: |
+          mkdir -p target/universal-apple-darwin
+          lipo -create \
+            target/aarch64-apple-darwin/release/${{ env.BINARY_NAME }} \
+            target/x86_64-apple-darwin/release/${{ env.BINARY_NAME }} \
+            -output target/universal-apple-darwin/${{ env.BINARY_NAME }}
+          lipo -info target/universal-apple-darwin/${{ env.BINARY_NAME }}
+
+      - name: Pack .mcpb
+        run: |
+          npm install -g @anthropic-ai/mcpb
+          bash scripts/pack-mcpb.sh
+
+      - name: Upload .mcpb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: clipboard-history-mcp-mcpb
+          path: clipboard-history-mcp.mcpb
+
+  release:
+    name: Create GitHub Release
+    needs: build-macos
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download .mcpb artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: clipboard-history-mcp-mcpb
+
+      - name: Extract tag version
+        id: tag
+        run: echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
+          generate_release_notes: true
+          files: |
+            clipboard-history-mcp.mcpb
