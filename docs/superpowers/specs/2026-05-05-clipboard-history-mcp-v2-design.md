@@ -206,29 +206,29 @@ sequenceDiagram
     participant DB as SQLite
     
     loop every 1.5s
-        D->>PB: pbpaste + changeCount?
+        D->>PB: poll pbpaste, compare changeCount
         alt new content
             PB-->>D: text
-            D->>D: respect transient/concealed types?<br/>(skip if password-manager flagged)
+            D->>D: skip if pasteboard advertises<br/>transient or concealed type
             D->>T: classify(text)
-            T-->>D: { primary_kind, kinds[] }
+            T-->>D: primary_kind plus kinds list
             D->>S: scan(text)
             alt secret detected
-                S-->>D: { secret_kind, value }
+                S-->>D: secret_kind plus value
                 D->>K: get master AES key
                 K-->>D: key
-                D->>D: encrypt(value)
-                D->>DB: INSERT clip (text=NULL, preview=REDACTED)<br/>+ secrets row
+                D->>D: encrypt value
+                D->>DB: INSERT clip with text NULL,<br/>preview REDACTED, secrets row
             else clean text
                 S-->>D: clean
-                D->>D: hash(text); existing?
+                D->>D: compute sha256, lookup hash
                 alt duplicate
-                    D->>DB: UPDATE last_copied_at, copy_count++
+                    D->>DB: UPDATE last_copied_at, copy_count plus 1
                 else new
-                    D->>DB: INSERT clip + kinds + FTS5
+                    D->>DB: INSERT clip plus kinds plus FTS5
                 end
             end
-            D->>D: capture frontApp via osascript<br/>(+ windowTitle if env-enabled)
+            D->>D: capture frontApp via osascript<br/>and windowTitle if env-enabled
         end
     end
 ```
