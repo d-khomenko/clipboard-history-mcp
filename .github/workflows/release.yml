@@ -52,7 +52,7 @@ jobs:
           bash scripts/pack-mcpb.sh
 
       - name: Upload .mcpb artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: clipboard-history-mcp-mcpb
           path: clipboard-history-mcp.mcpb
