@@ -1,0 +1,19 @@
+{
+  "name": "clipboard-history-mcp",
+  "version": "0.1.0",
+  "description": "MCP server exposing macOS clipboard history (last N entries).",
+  "type": "module",
+  "bin": {
+    "clipboard-history-mcp": "src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "watch-only": "node src/watcher-cli.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
