@@ -1,0 +1,65 @@
+use clipboard_history_mcp::core::store::{Store, ClipInput, SecretInput};
+use tempfile::TempDir;
+
+fn make_store() -> (TempDir, Store) {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("t.db");
+    let store = Store::open(&db_path, [0u8; 32]).unwrap();
+    (tmp, store)
+}
+
+#[test]
+fn insert_clip() {
+    let (_tmp, store) = make_store();
+    let id = store.add_clip(ClipInput {
+        text: "hello".into(),
+        primary_kind: "text".into(),
+        kinds: vec!["text".into()],
+        source_app: Some("Term".into()),
+        window_title: None,
+    }).unwrap();
+    assert!(id > 0);
+    let item = store.get_item(id).unwrap().unwrap();
+    assert_eq!(item.text.unwrap(), "hello");
+    assert_eq!(item.primary_kind, "text");
+}
+
+#[test]
+fn dedup_by_hash() {
+    let (_tmp, store) = make_store();
+    let i1 = store.add_clip(ClipInput { text: "x".into(), primary_kind: "text".into(), kinds: vec!["text".into()], source_app: None, window_title: None }).unwrap();
+    let i2 = store.add_clip(ClipInput { text: "x".into(), primary_kind: "text".into(), kinds: vec!["text".into()], source_app: None, window_title: None }).unwrap();
+    assert_eq!(i1, i2);
+    let item = store.get_item(i1).unwrap().unwrap();
+    assert_eq!(item.copy_count, 2);
+}
+
+#[test]
+fn secret_redacted_and_unlocks() {
+    let (_tmp, store) = make_store();
+    let id = store.add_secret(SecretInput {
+        text: "sk-abc".into(),
+        secret_kind: "openai".into(),
+        source_app: Some("Safari".into()),
+        window_title: Some("OpenAI".into()),
+    }).unwrap();
+    let item = store.get_item(id).unwrap().unwrap();
+    assert!(item.text.is_none());
+    assert!(item.preview.contains("REDACTED"));
+    let value = store.unlock_secret(id).unwrap();
+    assert_eq!(value, "sk-abc");
+}
+
+#[test]
+fn fts_finds_secret_by_window_title() {
+    let (_tmp, store) = make_store();
+    store.add_secret(SecretInput {
+        text: "sk-abc".into(),
+        secret_kind: "openai".into(),
+        source_app: Some("Safari".into()),
+        window_title: Some("OpenAI Platform".into()),
+    }).unwrap();
+    let hits = store.search("OpenAI", 10).unwrap();
+    assert!(!hits.is_empty());
+    assert!(hits[0].text.is_none());
+}
