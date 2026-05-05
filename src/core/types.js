@@ -1,4 +1,6 @@
-import detectLanguage from 'flourite';
+import * as _flourite from 'flourite';
+/** @type {(text: string, opts?: object) => { language: string; statistics: Record<string,number> }} */
+const detectLanguage = /** @type {any} */ (_flourite.default ?? _flourite);
 
 const URL_RE = /\bhttps?:\/\/[^\s<>"'`]+/i;
 const FULL_URL_RE = /^\s*https?:\/\/[^\s<>"'`]+\s*$/i;

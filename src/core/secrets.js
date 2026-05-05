@@ -10,7 +10,7 @@ function loadRules() {
   if (compiledRules) return compiledRules;
   const raw = readFileSync(RULES_PATH, 'utf8');
   const parsed = TOML.parse(raw);
-  const ruleSet = (parsed.rules || []).map((r) => {
+  const ruleSet = /** @type {any[]} */ (parsed.rules || []).map((r) => {
     // Skip path-only rules (no regex field)
     if (!r.regex) return null;
     try {

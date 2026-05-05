@@ -3,6 +3,7 @@ import { openDb } from './db.js';
 import { encrypt, decrypt } from './crypto.js';
 
 export class Store {
+  /** @param {string} path @param {{ masterKey?: Buffer }} [opts] */
   constructor(path, { masterKey } = {}) {
     this.db = openDb(path);
     this.masterKey = masterKey;
@@ -48,7 +49,7 @@ export class Store {
 
   addClip({ text, primaryKind, kinds = [], sourceApp = null, windowTitle = null }) {
     const hash = sha256(text);
-    const existing = this.prepared.findHash.get(hash);
+    const existing = /** @type {{ id: number } | undefined} */ (this.prepared.findHash.get(hash));
     const now = Date.now();
     if (existing) {
       this.prepared.bumpDuplicate.run(now, existing.id);
@@ -105,15 +106,15 @@ export class Store {
   }
 
   getItem(id) {
-    const row = this.prepared.getById.get(id);
+    const row = /** @type {any} */ (this.prepared.getById.get(id));
     if (!row) return null;
-    const kinds = this.prepared.getKinds.all(id).map((r) => r.kind);
-    const tags = this.prepared.getTags.all(id).map((r) => r.tag);
+    const kinds = /** @type {{ kind: string }[]} */ (this.prepared.getKinds.all(id)).map((r) => r.kind);
+    const tags = /** @type {{ tag: string }[]} */ (this.prepared.getTags.all(id)).map((r) => r.tag);
     return rowToItem(row, kinds, tags);
   }
 
   unlockSecret(id) {
-    const row = this.prepared.getSecret.get(id);
+    const row = /** @type {{ ciphertext: Buffer|null, nonce: Buffer } | undefined} */ (this.prepared.getSecret.get(id));
     if (!row) throw new Error(`No secret for clip ${id}`);
     if (!row.ciphertext) throw new Error('Secret stored with NEVER_STORE_SECRETS=1');
     if (!this.masterKey) throw new Error('master key not provided');
@@ -142,27 +143,27 @@ export class Store {
     `;
     params.limit = limit;
     params.offset = offset;
-    const rows = this.db.prepare(sql).all(params);
+    const rows = /** @type {any[]} */ (this.db.prepare(sql).all(params));
     return rows.map((r) => {
-      const kinds = this.prepared.getKinds.all(r.id).map((x) => x.kind);
-      const tags = this.prepared.getTags.all(r.id).map((x) => x.tag);
+      const kinds = /** @type {{ kind: string }[]} */ (this.prepared.getKinds.all(r.id)).map((x) => x.kind);
+      const tags = /** @type {{ tag: string }[]} */ (this.prepared.getTags.all(r.id)).map((x) => x.tag);
       return rowToItem(r, kinds, tags);
     });
   }
 
   search({ query, limit = 20 }) {
     const ftsQuery = sanitizeFts(query);
-    const rows = this.db.prepare(`
+    const rows = /** @type {any[]} */ (this.db.prepare(`
       SELECT clips.*, bm25(clips_fts) AS rank
       FROM clips_fts
       JOIN clips ON clips.id = clips_fts.rowid
       WHERE clips_fts MATCH ?
       ORDER BY rank
       LIMIT ?
-    `).all(ftsQuery, limit);
+    `).all(ftsQuery, limit));
     return rows.map((r) => {
-      const kinds = this.prepared.getKinds.all(r.id).map((x) => x.kind);
-      const tags = this.prepared.getTags.all(r.id).map((x) => x.tag);
+      const kinds = /** @type {{ kind: string }[]} */ (this.prepared.getKinds.all(r.id)).map((x) => x.kind);
+      const tags = /** @type {{ tag: string }[]} */ (this.prepared.getTags.all(r.id)).map((x) => x.tag);
       return rowToItem(r, kinds, tags);
     });
   }
@@ -200,9 +201,9 @@ export class Store {
   }
 
   stats() {
-    const total = this.db.prepare(`SELECT COUNT(*) AS n FROM clips`).get().n;
-    const oldest = this.db.prepare(`SELECT MIN(first_copied_at) AS t FROM clips`).get().t;
-    const newest = this.db.prepare(`SELECT MAX(last_copied_at) AS t FROM clips`).get().t;
+    const total = (/** @type {{ n: number }} */ (this.db.prepare(`SELECT COUNT(*) AS n FROM clips`).get())).n;
+    const oldest = (/** @type {{ t: number|null }} */ (this.db.prepare(`SELECT MIN(first_copied_at) AS t FROM clips`).get())).t;
+    const newest = (/** @type {{ t: number|null }} */ (this.db.prepare(`SELECT MAX(last_copied_at) AS t FROM clips`).get())).t;
     const byKind = this.db.prepare(
       `SELECT primary_kind AS kind, COUNT(*) AS n FROM clips GROUP BY primary_kind`
     ).all();

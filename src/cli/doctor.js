@@ -10,6 +10,7 @@ const TYPES_BIN = join(ROOT, 'bin/pasteboard-types');
 const DATA_DIR = join(homedir(), 'Library', 'Application Support', 'clipboard-history-mcp');
 
 export function doctor() {
+  /** @type {Array<[string, () => string]>} */
   const checks = [];
 
   checks.push(['data dir writable', () => {

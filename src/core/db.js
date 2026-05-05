@@ -90,7 +90,7 @@ export function openDb(path) {
     const meta = db.prepare(
       `SELECT value FROM meta WHERE key='schema_version'`
     );
-    const row = meta.get();
+    /** @type {{ value: string } | undefined} */ const row = /** @type {any} */ (meta.get());
     if (row) current = parseInt(row.value, 10);
   } catch {
     current = 0;
