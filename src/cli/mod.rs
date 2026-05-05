@@ -1,0 +1,46 @@
+use clap::{Parser, Subcommand};
+
+pub mod doctor;
+pub mod install;
+pub mod migrate_v2;
+pub mod status;
+pub mod uninstall;
+pub mod vault;
+
+#[derive(Parser)]
+#[command(name = "clipboard-history-mcp", version, about = "macOS clipboard history MCP")]
+pub struct Cli {
+    #[command(subcommand)]
+    pub command: Cmd,
+}
+
+#[derive(Subcommand)]
+pub enum Cmd {
+    /// Run the watcher daemon (poll pbpaste, write to DB)
+    Daemon,
+    /// Run the MCP stdio server
+    Serve,
+    /// Install launchd agent
+    Install {
+        #[arg(long)]
+        window_titles: bool,
+    },
+    /// Uninstall launchd agent
+    Uninstall {
+        #[arg(long)]
+        keep_data: bool,
+    },
+    /// Show daemon + DB status
+    Status,
+    /// Doctor diagnostic
+    Doctor,
+    /// Vault subcommands
+    Vault {
+        #[arg(value_name = "SUBCMD")]
+        sub: String,
+        #[arg(value_name = "ID")]
+        id: Option<i64>,
+    },
+    /// Migrate from v2 SQLite (no-op for matching schema)
+    MigrateV2,
+}
