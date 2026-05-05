@@ -12,3 +12,6 @@ dist/
 .vitest-cache/
 /target/
 Cargo.lock.bak
+
+# release artifact (uploaded to GitHub Releases)
+/clipboard-history-mcp.mcpb
