@@ -334,7 +334,7 @@ impl ClipboardServer {
     }
 
     #[tool(description = "Counts by kind, oldest/newest, db size.")]
-    async fn get_stats(&self, _: Parameters<()>) -> String {
+    async fn get_stats(&self, _: Parameters<LimitParams>) -> String {
         match self.store.stats() {
             Ok(s) => {
                 let size = std::fs::metadata(&self.db_path)
@@ -355,7 +355,7 @@ impl ClipboardServer {
     }
 
     #[tool(description = "Daemon status (running, pid).")]
-    async fn daemon_status(&self, _: Parameters<()>) -> String {
+    async fn daemon_status(&self, _: Parameters<LimitParams>) -> String {
         let pid_file = self.db_path.parent().unwrap().join("daemon.pid");
         if !pid_file.exists() {
             return r#"{"running":false}"#.into();
