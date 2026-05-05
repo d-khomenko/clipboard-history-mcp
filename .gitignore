@@ -1,6 +1,12 @@
 node_modules/
+coverage/
+dist/
 *.log
 .DS_Store
 .env
 .env.*
+*.db
+*.db-shm
+*.db-wal
 /bin/pasteboard-types
+.vitest-cache/
