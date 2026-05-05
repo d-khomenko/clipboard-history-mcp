@@ -282,6 +282,7 @@ dependencies = [
  "accessibility",
  "aes-gcm",
  "anyhow",
+ "block2",
  "clap",
  "ctrlc",
  "hex",
