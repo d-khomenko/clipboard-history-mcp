@@ -174,6 +174,12 @@ export class Store {
   bumpPaste(id) { this.prepared.bumpPaste.run(id); }
   delete(id) { this.prepared.remove.run(id); }
 
+  pruneOldest({ keep }) {
+    return this.db.prepare(
+      `DELETE FROM clips WHERE id IN (SELECT id FROM clips ORDER BY is_pinned DESC, last_copied_at DESC LIMIT -1 OFFSET ?)`
+    ).run(keep).changes;
+  }
+
   clear({ scope = 'all' } = {}) {
     if (scope === 'all') {
       const r = this.db.prepare(`DELETE FROM clips`).run();

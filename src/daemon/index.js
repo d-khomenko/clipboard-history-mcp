@@ -24,6 +24,7 @@ const stop = startWatcher(store, {
   captureWindowTitle: process.env.CLIPBOARD_CAPTURE_WINDOW_TITLE === '1',
   ignoreApps: (process.env.CLIPBOARD_IGNORE_APPS || '').split(',').map(s => s.trim()).filter(Boolean),
   neverStoreSecrets: process.env.CLIPBOARD_NEVER_STORE_SECRETS === '1',
+  maxItems: Number(process.env.CLIPBOARD_HISTORY_MAX) || 1000,
   log: (m) => process.stdout.write(`[daemon] ${new Date().toISOString()} ${m}\n`),
   onError: (e) => process.stderr.write(`[daemon] ${new Date().toISOString()} ERROR ${e.message}\n`),
 });

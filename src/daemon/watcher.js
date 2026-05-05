@@ -44,6 +44,7 @@ export function startWatcher(store, opts = {}) {
             windowTitle,
           });
           log(`secret captured: ${secret.kind} from ${frontApp}`);
+          store.pruneOldest({ keep: opts.maxItems ?? 1000 });
         }
         return;
       }
@@ -57,6 +58,7 @@ export function startWatcher(store, opts = {}) {
         windowTitle,
       });
       log(`clip captured: ${primaryKind} from ${frontApp ?? '?'}`);
+      store.pruneOldest({ keep: opts.maxItems ?? 1000 });
     } catch (err) {
       onError(err);
     }
