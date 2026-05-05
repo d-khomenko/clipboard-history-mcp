@@ -40,6 +40,12 @@ function readKeychain() {
   return Buffer.from(r.stdout.trim(), 'base64');
 }
 
+// Security note: the base64-encoded key is passed as a CLI argument to `security`,
+// which briefly exposes it in the process argument list (visible via `ps aux` to
+// same-uid processes). On macOS, ps output is restricted to the same UID by default,
+// so the practical risk is low. A fully hardened approach would use a Swift Keychain
+// helper that writes the secret via the Keychain API directly, bypassing argv
+// entirely — tracked as a future v0.3 improvement.
 function writeKeychain(key) {
   const r = spawnSync('security', [
     'add-generic-password',
