@@ -2,24 +2,19 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key>
-  <string>__LABEL__</string>
+  <key>Label</key><string>__LABEL__</string>
   <key>ProgramArguments</key>
   <array>
-    <string>__NODE__</string>
-    <string>__DAEMON_JS__</string>
+    <string>__BINARY__</string>
+    <string>daemon</string>
   </array>
-  <key>RunAtLoad</key>
-  <true/>
-  <key>KeepAlive</key>
-  <true/>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
   <key>EnvironmentVariables</key>
   <dict>
 __ENV_DICT__
   </dict>
-  <key>StandardOutPath</key>
-  <string>__LOG_PATH__</string>
-  <key>StandardErrorPath</key>
-  <string>__LOG_PATH__</string>
+  <key>StandardOutPath</key><string>__LOG__</string>
+  <key>StandardErrorPath</key><string>__LOG__</string>
 </dict>
 </plist>
