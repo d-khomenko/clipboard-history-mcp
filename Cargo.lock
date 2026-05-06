@@ -782,7 +782,7 @@ dependencies = [
  "objc2-foundation",
  "objc2-local-authentication",
  "once_cell",
- "rand 0.8.6",
+ "rand 0.9.4",
  "regex",
  "rmcp",
  "rpassword",
