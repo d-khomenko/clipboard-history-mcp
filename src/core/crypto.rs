@@ -1,11 +1,27 @@
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Nonce};
 use anyhow::{anyhow, Result};
+use keyring_core::{Entry, Error as KeyringError};
 use rand::RngCore;
-use security_framework::passwords::{set_generic_password, get_generic_password};
 
 const KEYCHAIN_SERVICE: &str = "clipboard-history-mcp";
-const KEYCHAIN_ACCOUNT: &str = "master-key-v1";
+const KEYCHAIN_ACCOUNT_V1: &str = "master-key-v1";
+
+/// Initialize the platform keyring store once per process.
+///
+/// keyring 4 splits into connector crates (keyring) + core (keyring-core).
+/// The default store must be set before Entry::new() is called.
+/// We call use_native_store(false) which picks:
+///   macOS  → Apple Keychain
+///   Linux  → kernel keyutils (false) or Secret Service (true)
+///   Windows → Windows Credential Manager
+fn ensure_keyring_store() {
+    use once_cell::sync::OnceCell;
+    static INIT: OnceCell<()> = OnceCell::new();
+    INIT.get_or_init(|| {
+        keyring::use_native_store(false).expect("failed to init keyring store");
+    });
+}
 
 pub fn encrypt(plaintext: &str, key: &[u8; 32]) -> (Vec<u8>, [u8; 12]) {
     let cipher = Aes256Gcm::new(key.into());
@@ -24,16 +40,40 @@ pub fn decrypt(ciphertext: &[u8], nonce: &[u8], key: &[u8; 32]) -> Result<String
 }
 
 pub fn get_or_create_master_key() -> Result<[u8; 32]> {
-    if let Ok(bytes) = get_generic_password(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT) {
-        if bytes.len() == 32 {
+    if let Some(k) = read_master_key_v1()? {
+        return Ok(k);
+    }
+    let k = generate_master_key();
+    write_master_key_v1(&k)?;
+    Ok(k)
+}
+
+fn read_master_key_v1() -> Result<Option<[u8; 32]>> {
+    ensure_keyring_store();
+    let entry = Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT_V1)
+        .map_err(|e| anyhow!("keyring entry: {}", e))?;
+    match entry.get_secret() {
+        Ok(bytes) if bytes.len() == 32 => {
             let mut k = [0u8; 32];
             k.copy_from_slice(&bytes);
-            return Ok(k);
+            Ok(Some(k))
         }
+        Ok(_) => Err(anyhow!("master-key-v1 has wrong length")),
+        Err(KeyringError::NoEntry) => Ok(None),
+        Err(e) => Err(anyhow!("keyring read: {}", e)),
     }
+}
+
+fn write_master_key_v1(key: &[u8; 32]) -> Result<()> {
+    ensure_keyring_store();
+    let entry = Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT_V1)
+        .map_err(|e| anyhow!("keyring entry: {}", e))?;
+    entry.set_secret(key).map_err(|e| anyhow!("keyring write: {}", e))?;
+    Ok(())
+}
+
+fn generate_master_key() -> [u8; 32] {
     let mut k = [0u8; 32];
     rand::thread_rng().fill_bytes(&mut k);
-    set_generic_password(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT, &k)
-        .map_err(|e| anyhow!("Keychain write failed: {}", e))?;
-    Ok(k)
+    k
 }
