@@ -1,12 +1,11 @@
-use crate::core::{biometry::BiometryGate, crypto::get_or_create_master_key, store::Store};
+use crate::core::{biometry::BiometryGate, crypto::get_or_create_master_key, paths, store::Store};
 use anyhow::{anyhow, Result};
-use std::path::PathBuf;
 
 pub fn vault(sub: &str, id: Option<i64>) -> Result<()> {
-    let home = std::env::var("HOME")?;
-    let db = PathBuf::from(&home)
-        .join("Library/Application Support/clipboard-history-mcp/history.db");
-    let key = get_or_create_master_key()?;
+    let db = paths::db_path();
+    let key = get_or_create_master_key(|| {
+        crate::core::master_password::prompt_password("Master password (5-min cache): ")
+    })?;
     let store = Store::open(&db, key)?;
 
     match sub {

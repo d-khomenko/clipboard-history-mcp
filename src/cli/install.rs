@@ -1,43 +1,35 @@
-use anyhow::{anyhow, Result};
-use std::path::PathBuf;
-use std::process::Command;
+use anyhow::Result;
 
-const LABEL: &str = "me.kz.clipboard-history-rs";
+#[cfg(target_os = "macos")]
+#[path = "install_macos.rs"]
+pub(super) mod install_macos;
 
-pub fn install(window_titles: bool) -> Result<()> {
-    let home = std::env::var("HOME")?;
-    let plist_path =
-        PathBuf::from(&home).join(format!("Library/LaunchAgents/{}.plist", LABEL));
-    let data_dir =
-        PathBuf::from(&home).join("Library/Application Support/clipboard-history-mcp");
-    std::fs::create_dir_all(&data_dir)?;
-    let log = data_dir.join("daemon.log");
-    let bin = std::env::current_exe()?;
+#[cfg(target_os = "linux")]
+#[path = "install_linux.rs"]
+pub mod install_linux;
 
-    let template = include_str!("../../scripts/launchd.plist.template");
-    let env_dict = format!(
-        r#"    <key>CLIPBOARD_CAPTURE_WINDOW_TITLE</key>
-    <string>{}</string>"#,
-        if window_titles { "1" } else { "0" }
-    );
-    let plist = template
-        .replace("__LABEL__", LABEL)
-        .replace("__BINARY__", bin.to_str().unwrap())
-        .replace("__ENV_DICT__", &env_dict)
-        .replace("__LOG__", log.to_str().unwrap());
-    std::fs::write(&plist_path, plist)?;
+pub struct InstallOpts {
+    pub window_titles: bool,
+    pub linger: bool,
+}
 
-    // Unload first (ignore error — may not be loaded)
-    let _ = Command::new("launchctl")
-        .args(["unload", plist_path.to_str().unwrap()])
-        .status();
-    let s = Command::new("launchctl")
-        .args(["load", "-w", plist_path.to_str().unwrap()])
-        .status()?;
-    if !s.success() {
-        return Err(anyhow!("launchctl load failed"));
+pub struct UninstallOpts {
+    pub keep_data: bool,
+}
+
+pub fn install(opts: InstallOpts) -> Result<()> {
+    #[cfg(target_os = "macos")]
+    {
+        let _ = opts.linger; // unused on macOS
+        return install_macos::install_macos(opts);
     }
-    println!("Installed → {}", plist_path.display());
-    println!("Logs    → {}", log.display());
-    Ok(())
+    #[cfg(target_os = "linux")]
+    {
+        return install_linux::install_linux(opts);
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    {
+        let _ = opts;
+        anyhow::bail!("install is not supported on this platform")
+    }
 }

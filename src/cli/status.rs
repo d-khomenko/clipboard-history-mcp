@@ -1,13 +1,11 @@
+use crate::core::paths;
 use anyhow::Result;
 use serde_json::json;
-use std::path::PathBuf;
 
 pub fn status() -> Result<()> {
-    let home = std::env::var("HOME")?;
-    let data_dir =
-        PathBuf::from(&home).join("Library/Application Support/clipboard-history-mcp");
-    let pid_file = data_dir.join("daemon.pid");
-    let db = data_dir.join("history.db");
+    let data_dir = paths::data_dir();
+    let pid_file = paths::pid_file_path();
+    let db = paths::db_path();
 
     let daemon = if pid_file.exists() {
         let pid = std::fs::read_to_string(&pid_file)?

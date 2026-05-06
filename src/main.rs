@@ -2,26 +2,11 @@ use anyhow::Result;
 use clap::Parser;
 use clipboard_history_mcp::cli::{Cli, Cmd};
 use clipboard_history_mcp::core::crypto::get_or_create_master_key;
-use std::path::PathBuf;
+use clipboard_history_mcp::core::paths::{data_dir, db_path, pid_file_path};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
-
-fn data_dir() -> PathBuf {
-    if let Ok(p) = std::env::var("CLIPBOARD_DATA_DIR") {
-        return PathBuf::from(p);
-    }
-    let home = std::env::var("HOME").unwrap_or_default();
-    PathBuf::from(home).join("Library/Application Support/clipboard-history-mcp")
-}
-
-fn db_path() -> PathBuf {
-    if let Ok(p) = std::env::var("CLIPBOARD_DB_PATH") {
-        return PathBuf::from(p);
-    }
-    data_dir().join("history.db")
-}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -37,11 +22,15 @@ async fn main() -> Result<()> {
     match cli.command {
         Cmd::Daemon => run_daemon().await,
         Cmd::Serve => clipboard_history_mcp::mcp::run_server().await,
-        Cmd::Install { window_titles } => {
-            clipboard_history_mcp::cli::install::install(window_titles)
+        Cmd::Install { window_titles, linger } => {
+            clipboard_history_mcp::cli::install::install(
+                clipboard_history_mcp::cli::install::InstallOpts { window_titles, linger },
+            )
         }
         Cmd::Uninstall { keep_data } => {
-            clipboard_history_mcp::cli::uninstall::uninstall(keep_data)
+            clipboard_history_mcp::cli::uninstall::uninstall(
+                clipboard_history_mcp::cli::install::UninstallOpts { keep_data },
+            )
         }
         Cmd::Status => clipboard_history_mcp::cli::status::status(),
         Cmd::Doctor => clipboard_history_mcp::cli::doctor::doctor(),
@@ -53,11 +42,13 @@ async fn main() -> Result<()> {
 async fn run_daemon() -> Result<()> {
     use clipboard_history_mcp::daemon::watcher::{run_watcher, WatcherOptions};
 
-    let key = get_or_create_master_key()?;
+    let key = get_or_create_master_key(|| {
+        clipboard_history_mcp::core::master_password::prompt_password("Master password (5-min cache): ")
+    })?;
     let path = db_path();
     let stop = Arc::new(AtomicBool::new(false));
 
-    let pid_file = data_dir().join("daemon.pid");
+    let pid_file = pid_file_path();
     std::fs::create_dir_all(data_dir())?;
     std::fs::write(&pid_file, std::process::id().to_string())?;
 
@@ -91,7 +82,7 @@ async fn run_daemon() -> Result<()> {
         db_path()
     );
 
-    // Watcher runs on its own std::thread because NSPasteboard is !Send.
+    // Watcher runs on its own std::thread because arboard Clipboard is !Send on some platforms.
     // It opens its own Store (rusqlite::Connection is also !Send).
     let stop_for_watcher = stop.clone();
     let path_clone = path.clone();

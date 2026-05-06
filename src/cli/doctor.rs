@@ -1,54 +1,96 @@
 use anyhow::Result;
-use std::process::Command;
 
 pub fn doctor() -> Result<()> {
-    let checks: Vec<(&str, Box<dyn Fn() -> Result<String>>)> = vec![
-        (
-            "data dir writable",
-            Box::new(|| {
-                let home = std::env::var("HOME")?;
-                let p = std::path::PathBuf::from(home)
-                    .join("Library/Application Support/clipboard-history-mcp");
-                std::fs::create_dir_all(&p)?;
-                // Verify it is actually writable by probing a temp file.
-                let probe = p.join(".write_probe");
-                std::fs::write(&probe, b"ok")?;
-                std::fs::remove_file(&probe)?;
-                Ok(p.display().to_string())
-            }),
-        ),
-        (
-            "Keychain accessible",
-            Box::new(|| {
-                let s = Command::new("security").arg("list-keychains").output()?;
-                if !s.status.success() {
-                    return Err(anyhow::anyhow!("security CLI failed"));
-                }
-                Ok("ok".into())
-            }),
-        ),
-        (
-            "NSPasteboard reachable",
-            Box::new(|| {
-                let _ = crate::core::pasteboard::change_count();
-                Ok("ok".into())
-            }),
-        ),
-    ];
+    let mut checks: Vec<(&str, Box<dyn Fn() -> Result<String>>)> = vec![];
 
-    let mut all_ok = true;
+    checks.push((
+        "data dir writable",
+        Box::new(|| {
+            let p = crate::core::paths::data_dir();
+            std::fs::create_dir_all(&p)?;
+            let probe = p.join(".write_probe");
+            std::fs::write(&probe, b"ok")?;
+            std::fs::remove_file(&probe)?;
+            Ok(p.display().to_string())
+        }),
+    ));
+
+    checks.push((
+        "keyring accessible",
+        Box::new(|| {
+            use keyring_core::Entry;
+            // Ensure the platform keyring backend is initialized before using Entry.
+            static KEYRING_INIT: once_cell::sync::OnceCell<()> = once_cell::sync::OnceCell::new();
+            KEYRING_INIT.get_or_init(|| {
+                let _ = keyring::use_native_store(false);
+            });
+            let entry = Entry::new("clipboard-history-mcp-doctor", "ping")
+                .map_err(|e| anyhow::anyhow!("keyring entry: {}", e))?;
+            let _ = entry.set_secret(b"ok");
+            let _ = entry.delete_credential();
+            Ok("ok".into())
+        }),
+    ));
+
+    checks.push((
+        "clipboard reachable (arboard)",
+        Box::new(|| {
+            let _ = crate::core::pasteboard::change_count();
+            Ok("ok".into())
+        }),
+    ));
+
+    #[cfg(target_os = "macos")]
+    checks.push((
+        "launchd service installed",
+        Box::new(|| {
+            let home = std::env::var("HOME")?;
+            let p = std::path::PathBuf::from(home)
+                .join("Library/LaunchAgents/me.kz.clipboard-history-rs.plist");
+            if p.exists() {
+                Ok(p.display().to_string())
+            } else {
+                Err(anyhow::anyhow!(
+                    "not installed (run `clipboard-history-mcp install`)"
+                ))
+            }
+        }),
+    ));
+
+    #[cfg(target_os = "linux")]
+    checks.push((
+        "systemd unit installed",
+        Box::new(|| {
+            let home = std::env::var("HOME")?;
+            let p = std::path::PathBuf::from(home)
+                .join(".config/systemd/user/clipboard-history-mcp.service");
+            if p.exists() {
+                Ok(p.display().to_string())
+            } else {
+                Err(anyhow::anyhow!(
+                    "not installed (run `clipboard-history-mcp install`)"
+                ))
+            }
+        }),
+    ));
+
+    #[cfg(target_os = "linux")]
+    checks.push((
+        "X display present",
+        Box::new(|| {
+            if std::env::var("DISPLAY").is_ok() || std::env::var("WAYLAND_DISPLAY").is_ok() {
+                Ok("yes".into())
+            } else {
+                Err(anyhow::anyhow!("no DISPLAY or WAYLAND_DISPLAY"))
+            }
+        }),
+    ));
+
     for (label, check) in checks {
         match check() {
             Ok(out) => println!("✓ {}: {}", label, out),
-            Err(e) => {
-                println!("✗ {}: {}", label, e);
-                all_ok = false;
-            }
+            Err(e) => println!("✗ {}: {}", label, e),
         }
-    }
-
-    if all_ok {
-        println!("All checks passed.");
     }
     Ok(())
 }

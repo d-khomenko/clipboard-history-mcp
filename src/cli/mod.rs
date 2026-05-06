@@ -20,12 +20,15 @@ pub enum Cmd {
     Daemon,
     /// Run the MCP stdio server
     Serve,
-    /// Install launchd agent
+    /// Install daemon service (launchd on macOS, systemd on Linux)
     Install {
         #[arg(long)]
         window_titles: bool,
+        /// Linux only: enable systemd linger so the service survives logout
+        #[arg(long)]
+        linger: bool,
     },
-    /// Uninstall launchd agent
+    /// Uninstall daemon service
     Uninstall {
         #[arg(long)]
         keep_data: bool,
