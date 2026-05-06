@@ -1,0 +1,6 @@
+# Funding sources rendered as the "Sponsor" button next to ⭐ Star on GitHub.
+# Only takes effect on the repo's default branch.
+#
+# Order matters — first entry wins the prominent placement on the dropdown.
+github: [d-khomenko]
+patreon: DmytroKhomenko

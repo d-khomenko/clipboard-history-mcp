@@ -241,6 +241,23 @@ See [CHANGELOG.md](CHANGELOG.md). Latest: [v0.3.0-alpha.0](https://github.com/d-
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). PRs welcome — issues with macOS 13/14 reproductions especially.
 
+## Sponsor
+
+Pre-1.0 alpha. Built solo, in bursts. If `clipboard-history-mcp` finds you a
+leaked key, saves you from typing the same JSON twice, or just makes Claude
+slightly more useful at your terminal — consider [becoming a backer or
+Founding Sponsor on Patreon](https://www.patreon.com/c/DmytroKhomenko).
+
+- **$3 / month — backer ☕** — name in [`SUPPORTERS.md`](./SUPPORTERS.md), Discord role
+- **$10 / month — founding sponsor 🥇** — name + avatar in this README, **permanently** listed if you join before v1.0
+
+Sponsorship is gratitude, not a support contract. It does not buy priority
+issue triage, custom features, or response-time SLA — solo OSS doesn't scale
+that way. What it buys: visibility, the occasional roadmap vote, and proof
+that this kind of tool is worth maintaining past `0.x`.
+
+GitHub Sponsors works too — see the **Sponsor** button at the top of the repo.
+
 ## License
 
 MIT. `vendor/gitleaks.toml` is the gitleaks rule catalog (also MIT) — see `vendor/README.md`.
