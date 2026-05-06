@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0-alpha.0] — 2026-05-06
+
+### Added
+- **Linux port** — clipboard-history-mcp now runs on Linux (X11 and Wayland) in addition to macOS.
+- Cross-platform crates replace macOS-specific ones: `arboard` (clipboard), `keyring` (secret storage), `directories-next` (XDG paths), `active-win-pos-rs` (frontmost app).
+- X11 window-title capture via `x11rb` (Wayland deferred to v0.4.x).
+- systemd user service installer for Linux (with optional `--linger`).
+- Master-password vault (Argon2id KEK wrap of master key) — universal biometry mechanism. Touch ID stays as macOS-native unlock UX.
+- v3 → v4 migration: `clipboard-history-mcp migrate-v2` now also re-encrypts the master key under the new password-wrapped scheme.
+
+### Changed
+- Master key is now stored as `master-key-v2` in the keyring (password-wrapped). `master-key-v1` (raw) remains readable for compat-mode but the migration command upgrades it.
+- macOS data dir moved from `~/Library/Application Support/clipboard-history-mcp/` to `~/Library/Application Support/me.kz.clipboard-history-mcp/` (XDG-style qualified). `migrate-v2` moves the existing dir.
+- Doctor command checks adjusted per OS.
+
+### Removed
+- Swift `pasteboard-types` helper. NSPasteboard transient-type detection is replaced by a populated default `CLIPBOARD_IGNORE_APPS` list (1Password, Bitwarden, KeePassXC).
+- `security-framework` dependency. `keyring` covers the same Keychain Services API on macOS.
+
+### Notes
+- Windows port is planned for v0.5.
+- MCPB packaging is still macOS-only (the format is Anthropic-targeted at Claude Desktop on Mac).
+
 ## [0.3.0-alpha.0] — 2026-05-06
 
 ### Added
