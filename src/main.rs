@@ -74,6 +74,22 @@ async fn run_daemon() -> Result<()> {
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(1000),
+        vault_mirror: std::env::var("CLIPBOARD_VAULT_PATH")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+            .map(|s| {
+                // Resolve relative paths against $HOME so users can pass
+                // shell-expanded values like "Documents/Obsidian/MyVault".
+                let p = std::path::PathBuf::from(&s);
+                let resolved = if p.is_absolute() {
+                    p
+                } else if let Ok(home) = std::env::var("HOME") {
+                    std::path::PathBuf::from(home).join(p)
+                } else {
+                    p
+                };
+                clipboard_history_mcp::core::vault::VaultMirror::new(resolved)
+            }),
     };
 
     tracing::info!(
