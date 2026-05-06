@@ -6,7 +6,9 @@ use rmcp::{transport::stdio, ServiceExt};
 use std::sync::Arc;
 
 pub async fn run_server() -> Result<()> {
-    let key = get_or_create_master_key()?;
+    let key = get_or_create_master_key(|| {
+        crate::core::master_password::prompt_password("Master password (5-min cache): ")
+    })?;
     let dbp = paths::db_path();
     std::fs::create_dir_all(dbp.parent().unwrap_or(&dbp))?;
     let store = Arc::new(Store::open(&dbp, key)?);

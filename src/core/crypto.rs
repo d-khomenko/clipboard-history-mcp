@@ -39,16 +39,27 @@ pub fn decrypt(ciphertext: &[u8], nonce: &[u8], key: &[u8; 32]) -> Result<String
     Ok(String::from_utf8(pt)?)
 }
 
-pub fn get_or_create_master_key() -> Result<[u8; 32]> {
-    if let Some(k) = read_master_key_v1()? {
-        return Ok(k);
+pub fn get_or_create_master_key(password_provider: impl FnOnce() -> Result<String>) -> Result<[u8; 32]> {
+    if let Some(wrapped_entry) = read_master_key_v2()? {
+        let pw = password_provider()?;
+        let wrapped = crate::core::master_password::WrappedKey {
+            salt: wrapped_entry.salt,
+            nonce: wrapped_entry.nonce,
+            ciphertext: wrapped_entry.ciphertext,
+        };
+        return crate::core::master_password::unwrap_master_key(&wrapped, &pw);
     }
+    if let Some(legacy_key) = read_master_key_v1()? {
+        return Ok(legacy_key);
+    }
+    // First-ever run — generate fresh, store as v1 (compat path) until user
+    // sets a master password via `clipboard-history-mcp migrate-v2`.
     let k = generate_master_key();
     write_master_key_v1(&k)?;
     Ok(k)
 }
 
-fn read_master_key_v1() -> Result<Option<[u8; 32]>> {
+pub fn read_master_key_v1() -> Result<Option<[u8; 32]>> {
     ensure_keyring_store();
     let entry = Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT_V1)
         .map_err(|e| anyhow!("keyring entry: {}", e))?;
@@ -93,4 +104,53 @@ pub fn decrypt_bytes(ciphertext: &[u8], nonce: &[u8], key: &[u8; 32]) -> Result<
     cipher
         .decrypt(n, ciphertext)
         .map_err(|_| anyhow!("AEAD authentication failed"))
+}
+
+const KEYCHAIN_ACCOUNT_V2: &str = "master-key-v2";
+
+pub struct WrappedKeyEntry {
+    pub salt: Vec<u8>,
+    pub nonce: [u8; 12],
+    pub ciphertext: Vec<u8>,
+}
+
+pub fn read_master_key_v2() -> Result<Option<WrappedKeyEntry>> {
+    ensure_keyring_store();
+    let entry = Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT_V2)
+        .map_err(|e| anyhow!("keyring entry: {}", e))?;
+    let bytes = match entry.get_secret() {
+        Ok(b) => b,
+        Err(KeyringError::NoEntry) => return Ok(None),
+        Err(e) => return Err(anyhow!("keyring read v2: {}", e)),
+    };
+    if bytes.len() < 16 + 12 + 16 {
+        return Err(anyhow!("master-key-v2 has invalid length"));
+    }
+    let salt = bytes[..16].to_vec();
+    let mut nonce = [0u8; 12];
+    nonce.copy_from_slice(&bytes[16..28]);
+    let ciphertext = bytes[28..].to_vec();
+    Ok(Some(WrappedKeyEntry { salt, nonce, ciphertext }))
+}
+
+pub fn write_master_key_v2(wrapped: &crate::core::master_password::WrappedKey) -> Result<()> {
+    ensure_keyring_store();
+    let mut buf = Vec::with_capacity(16 + 12 + wrapped.ciphertext.len());
+    buf.extend_from_slice(&wrapped.salt);
+    buf.extend_from_slice(&wrapped.nonce);
+    buf.extend_from_slice(&wrapped.ciphertext);
+    let entry = Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT_V2)
+        .map_err(|e| anyhow!("keyring entry: {}", e))?;
+    entry.set_secret(&buf).map_err(|e| anyhow!("keyring write v2: {}", e))?;
+    Ok(())
+}
+
+pub fn delete_master_key_v1() -> Result<()> {
+    ensure_keyring_store();
+    let entry = Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT_V1)
+        .map_err(|e| anyhow!("keyring entry: {}", e))?;
+    match entry.delete_credential() {
+        Ok(_) | Err(KeyringError::NoEntry) => Ok(()),
+        Err(e) => Err(anyhow!("keyring delete v1: {}", e)),
+    }
 }

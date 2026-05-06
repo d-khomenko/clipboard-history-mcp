@@ -38,7 +38,9 @@ async fn main() -> Result<()> {
 async fn run_daemon() -> Result<()> {
     use clipboard_history_mcp::daemon::watcher::{run_watcher, WatcherOptions};
 
-    let key = get_or_create_master_key()?;
+    let key = get_or_create_master_key(|| {
+        clipboard_history_mcp::core::master_password::prompt_password("Master password (5-min cache): ")
+    })?;
     let path = db_path();
     let stop = Arc::new(AtomicBool::new(false));
 

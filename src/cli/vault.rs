@@ -3,7 +3,9 @@ use anyhow::{anyhow, Result};
 
 pub fn vault(sub: &str, id: Option<i64>) -> Result<()> {
     let db = paths::db_path();
-    let key = get_or_create_master_key()?;
+    let key = get_or_create_master_key(|| {
+        crate::core::master_password::prompt_password("Master password (5-min cache): ")
+    })?;
     let store = Store::open(&db, key)?;
 
     match sub {
