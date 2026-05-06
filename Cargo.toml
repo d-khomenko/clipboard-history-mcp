@@ -58,6 +58,8 @@ rpassword                  = "7"
 
 # macOS-only
 [target.'cfg(target_os = "macos")'.dependencies]
+objc2                      = "0.6"
+objc2-foundation           = "0.3"
 objc2-local-authentication = "0.3"
 block2                     = "0.6"
 
