@@ -20,20 +20,20 @@ flowchart LR
 You're working in Claude. You've copied **47 things today** — URLs, JSON snippets, an OpenAI key from a dashboard, a SQL query from your DB tool, half a Stripe webhook payload. Now Claude can use any of them:
 
 ```
-You:  «Знайди той API ключ що я копіював з OpenAI dashboard вчора»
-Claude:  Found 1 secret matching "OpenAI" — kind: openai_api_key,
-         source: Safari, copied 14h ago. Last 4 chars: ab12.
-         To reveal, call unlock_secret(id=23, reason="...").
+You: "Find that API key I copied from the OpenAI dashboard yesterday"
+Claude: Found 1 secret matching "OpenAI" — kind: openai_api_key,
+source: Safari, copied 14h ago. Last 4 chars: ab12.
+To reveal, call unlock_secret(id=23, reason="...").
 
-You:  «Дай мені всі URL з GitHub які я відкривав»
-Claude:  Returns 12 unique GitHub URLs deduplicated by repo,
-         ranked by how often you pasted them back.
+You: "Give me all the GitHub URLs I copied"
+Claude: Returns 12 unique GitHub URLs deduplicated by repo,
+ranked by how often you pasted them back.
 
-You:  «У буфері була JSON-конфіга з Stripe — поверни її в кліпборд»
-Claude:  Found, restoring. ✓ ready to ⌘V.
+You: "There was a Stripe JSON config in the buffer — restore it to my clipboard"
+Claude: Found, restoring. ✓ ready to ⌘V.
 
-You:  «Який код я копіював з ChatGPT за останні 2 години?»
-Claude:  3 Python snippets, 1 SQL query, 1 shell command.
+You: "What code did I copy from ChatGPT over the last 2 hours?"
+Claude: 3 Python snippets, 1 SQL query, 1 shell command.
 ```
 
 Search uses SQLite **FTS5** + window-title indexing — you find clips by *where* you copied them, not just by content.
