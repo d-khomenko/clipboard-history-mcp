@@ -8,6 +8,7 @@ ExecStart=__BINARY__ daemon
 Restart=on-failure
 RestartSec=5
 Environment="CLIPBOARD_CAPTURE_WINDOW_TITLE=__CAPTURE_WINDOW_TITLE__"
+__VAULT_ENV_LINE__
 StandardOutput=append:__LOG__
 StandardError=append:__LOG__
 

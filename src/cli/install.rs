@@ -1,4 +1,5 @@
 use anyhow::Result;
+use std::path::PathBuf;
 
 #[cfg(target_os = "macos")]
 #[path = "install_macos.rs"]
@@ -11,6 +12,10 @@ pub mod install_linux;
 pub struct InstallOpts {
     pub window_titles: bool,
     pub linger: bool,
+    /// Auto-mirror non-secret clips to this Obsidian vault path.
+    /// Threaded through to launchd plist (macOS) or systemd unit (Linux)
+    /// as `CLIPBOARD_VAULT_PATH` env var.
+    pub vault: Option<PathBuf>,
 }
 
 pub struct UninstallOpts {
