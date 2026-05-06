@@ -2,8 +2,11 @@ use anyhow::{anyhow, Context, Result};
 use argon2::{Algorithm, Argon2, Params, Version};
 use rand::RngCore;
 
-const SALT_LEN: usize = 16;
-const KEK_LEN: usize = 32;
+pub const SALT_LEN: usize = 16;
+pub const KEK_LEN: usize = 32;
+pub const NONCE_LEN: usize = 12;
+/// Minimum ciphertext length: 32-byte plaintext + 16-byte GCM authentication tag.
+pub const MIN_CIPHERTEXT_LEN: usize = 32 + 16;
 
 pub struct WrappedKey {
     pub salt: Vec<u8>,

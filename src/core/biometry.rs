@@ -25,6 +25,15 @@ impl BiometryGate {
 
     #[cfg(target_os = "macos")]
     fn evaluate_inner(&self, reason: &str) -> Result<bool> {
+        // Check if user is on the v1 compat path and warn them to migrate.
+        // The LAContext gate still applies even in v1 mode, but the master key
+        // itself is not password-protected, so we emit a deprecation warning.
+        if crate::core::crypto::read_master_key_v2()?.is_none() {
+            tracing::warn!(
+                "master-key-v1 compat mode active. Run `clipboard-history-mcp migrate-v2` \
+                 to set a master password and enable v4 secret protections."
+            );
+        }
         macos::evaluate_la_context(reason)
     }
 
@@ -34,7 +43,11 @@ impl BiometryGate {
         use crate::core::master_password::{prompt_password, unwrap_master_key, WrappedKey};
 
         let Some(entry) = read_master_key_v2()? else {
-            // No v2 entry → user is on v1 raw-key compat mode → no biometry, just allow.
+            // No v2 entry → user is on v1 raw-key compat mode → no biometry gate.
+            tracing::warn!(
+                "master-key-v1 compat mode active. Run `clipboard-history-mcp migrate-v2` \
+                 to set a master password and enable v4 secret protections."
+            );
             return Ok(true);
         };
         let pw = prompt_password("Master password to unlock: ")?;
@@ -83,6 +96,21 @@ mod macos {
     use objc2_local_authentication::{LAContext, LAPolicy};
     use std::time::Duration;
 
+    /// Thin `Send` wrapper around `RcBlock`.
+    ///
+    /// `block2` 0.6 does not yet expose an `ArcBlock` type for thread-safe
+    /// blocks. The LAContext reply callback is invoked on an arbitrary GCD
+    /// queue (i.e. a different thread), so we must ensure the block is `Send`.
+    ///
+    /// Safety: the closure captured inside the block contains only
+    /// `mpsc::Sender<bool>`, which is `Send`. ObjC's block reference counting
+    /// uses atomic operations, so it is safe to share the pointer across
+    /// threads. We never call the block from Rust — we only pass it to the
+    /// ObjC runtime, which takes ownership and calls it once on its own queue.
+    struct SendBlock(block2::RcBlock<dyn Fn(objc2::runtime::Bool, *mut NSError)>);
+    // SAFETY: see doc comment above.
+    unsafe impl Send for SendBlock {}
+
     pub fn evaluate_la_context(reason: &str) -> Result<bool> {
         let ok = autoreleasepool(|_| unsafe {
             let ctx = LAContext::new();
@@ -96,12 +124,12 @@ mod macos {
             let (sender, receiver) = std::sync::mpsc::channel::<bool>();
 
             use objc2::runtime::Bool;
-            let block = block2::RcBlock::<dyn Fn(Bool, *mut NSError)>::new(
+            let block = SendBlock(block2::RcBlock::<dyn Fn(Bool, *mut NSError)>::new(
                 move |success: Bool, _err: *mut NSError| {
                     let _ = sender.send(success.as_bool());
                 },
-            );
-            ctx.evaluatePolicy_localizedReason_reply(policy, &reason_ns, &*block);
+            ));
+            ctx.evaluatePolicy_localizedReason_reply(policy, &reason_ns, &*block.0);
             receiver.recv_timeout(Duration::from_secs(60)).unwrap_or(false)
         });
         Ok(ok)
