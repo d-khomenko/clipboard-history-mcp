@@ -1,0 +1,15 @@
+[Unit]
+Description=clipboard-history-mcp watcher daemon
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=__BINARY__ daemon
+Restart=on-failure
+RestartSec=5
+Environment="CLIPBOARD_CAPTURE_WINDOW_TITLE=__CAPTURE_WINDOW_TITLE__"
+StandardOutput=append:__LOG__
+StandardError=append:__LOG__
+
+[Install]
+WantedBy=default.target

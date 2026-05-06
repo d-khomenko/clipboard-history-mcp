@@ -22,11 +22,15 @@ async fn main() -> Result<()> {
     match cli.command {
         Cmd::Daemon => run_daemon().await,
         Cmd::Serve => clipboard_history_mcp::mcp::run_server().await,
-        Cmd::Install { window_titles } => {
-            clipboard_history_mcp::cli::install::install(window_titles)
+        Cmd::Install { window_titles, linger } => {
+            clipboard_history_mcp::cli::install::install(
+                clipboard_history_mcp::cli::install::InstallOpts { window_titles, linger },
+            )
         }
         Cmd::Uninstall { keep_data } => {
-            clipboard_history_mcp::cli::uninstall::uninstall(keep_data)
+            clipboard_history_mcp::cli::uninstall::uninstall(
+                clipboard_history_mcp::cli::install::UninstallOpts { keep_data },
+            )
         }
         Cmd::Status => clipboard_history_mcp::cli::status::status(),
         Cmd::Doctor => clipboard_history_mcp::cli::doctor::doctor(),
