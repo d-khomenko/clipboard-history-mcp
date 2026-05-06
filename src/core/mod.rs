@@ -7,3 +7,4 @@ pub mod store;
 pub mod types;
 pub mod biometry;
 pub mod master_password;
+pub mod vault;
