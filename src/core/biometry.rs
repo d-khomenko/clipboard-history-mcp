@@ -30,8 +30,20 @@ impl BiometryGate {
 
     #[cfg(target_os = "linux")]
     fn evaluate_inner(&self, _reason: &str) -> Result<bool> {
-        // v0.4.0-alpha.0: no biometry, master-password gate lands in Task 9.
-        Ok(true)
+        use crate::core::crypto::read_master_key_v2;
+        use crate::core::master_password::{prompt_password, unwrap_master_key, WrappedKey};
+
+        let Some(entry) = read_master_key_v2()? else {
+            // No v2 entry → user is on v1 raw-key compat mode → no biometry, just allow.
+            return Ok(true);
+        };
+        let pw = prompt_password("Master password to unlock: ")?;
+        let wrapped = WrappedKey {
+            salt: entry.salt,
+            nonce: entry.nonce,
+            ciphertext: entry.ciphertext,
+        };
+        Ok(unwrap_master_key(&wrapped, &pw).is_ok())
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]
