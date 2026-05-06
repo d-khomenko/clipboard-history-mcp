@@ -1,10 +1,8 @@
+use crate::core::paths;
 use anyhow::Result;
-use std::path::PathBuf;
 
 pub fn migrate_v2() -> Result<()> {
-    let home = std::env::var("HOME")?;
-    let v2_db = PathBuf::from(&home)
-        .join("Library/Application Support/clipboard-history-mcp/history.db");
+    let v2_db = paths::db_path();
     if !v2_db.exists() {
         println!(
             "No v2 DB found at {} — nothing to migrate.",

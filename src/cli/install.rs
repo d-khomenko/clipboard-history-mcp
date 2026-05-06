@@ -1,5 +1,5 @@
+use crate::core::paths;
 use anyhow::{anyhow, Result};
-use std::path::PathBuf;
 use std::process::Command;
 
 const LABEL: &str = "me.kz.clipboard-history-rs";
@@ -7,11 +7,10 @@ const LABEL: &str = "me.kz.clipboard-history-rs";
 pub fn install(window_titles: bool) -> Result<()> {
     let home = std::env::var("HOME")?;
     let plist_path =
-        PathBuf::from(&home).join(format!("Library/LaunchAgents/{}.plist", LABEL));
-    let data_dir =
-        PathBuf::from(&home).join("Library/Application Support/clipboard-history-mcp");
+        std::path::PathBuf::from(&home).join(format!("Library/LaunchAgents/{}.plist", LABEL));
+    let data_dir = paths::data_dir();
     std::fs::create_dir_all(&data_dir)?;
-    let log = data_dir.join("daemon.log");
+    let log = paths::log_path();
     let bin = std::env::current_exe()?;
 
     let template = include_str!("../../scripts/launchd.plist.template");

@@ -1,3 +1,4 @@
+use crate::core::paths;
 use anyhow::Result;
 use std::process::Command;
 
@@ -6,9 +7,7 @@ pub fn doctor() -> Result<()> {
         (
             "data dir writable",
             Box::new(|| {
-                let home = std::env::var("HOME")?;
-                let p = std::path::PathBuf::from(home)
-                    .join("Library/Application Support/clipboard-history-mcp");
+                let p = paths::data_dir();
                 std::fs::create_dir_all(&p)?;
                 // Verify it is actually writable by probing a temp file.
                 let probe = p.join(".write_probe");
@@ -28,7 +27,7 @@ pub fn doctor() -> Result<()> {
             }),
         ),
         (
-            "NSPasteboard reachable",
+            "clipboard reachable",
             Box::new(|| {
                 let _ = crate::core::pasteboard::change_count();
                 Ok("ok".into())

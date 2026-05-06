@@ -1,13 +1,12 @@
+use crate::core::paths;
 use anyhow::Result;
-use std::path::PathBuf;
 use std::process::Command;
 
 pub fn uninstall(keep_data: bool) -> Result<()> {
     let home = std::env::var("HOME")?;
-    let plist = PathBuf::from(&home)
+    let plist = std::path::PathBuf::from(&home)
         .join("Library/LaunchAgents/me.kz.clipboard-history-rs.plist");
-    let data_dir =
-        PathBuf::from(&home).join("Library/Application Support/clipboard-history-mcp");
+    let data_dir = paths::data_dir();
 
     if plist.exists() {
         let _ = Command::new("launchctl")
