@@ -77,3 +77,20 @@ fn generate_master_key() -> [u8; 32] {
     rand::thread_rng().fill_bytes(&mut k);
     k
 }
+
+pub fn encrypt_bytes(plaintext: &[u8], key: &[u8; 32]) -> (Vec<u8>, [u8; 12]) {
+    let cipher = Aes256Gcm::new(key.into());
+    let mut nonce = [0u8; 12];
+    rand::thread_rng().fill_bytes(&mut nonce);
+    let n = Nonce::from_slice(&nonce);
+    let ct = cipher.encrypt(n, plaintext).expect("encrypt");
+    (ct, nonce)
+}
+
+pub fn decrypt_bytes(ciphertext: &[u8], nonce: &[u8], key: &[u8; 32]) -> Result<Vec<u8>> {
+    let cipher = Aes256Gcm::new(key.into());
+    let n = Nonce::from_slice(nonce);
+    cipher
+        .decrypt(n, ciphertext)
+        .map_err(|_| anyhow!("AEAD authentication failed"))
+}

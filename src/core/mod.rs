@@ -6,3 +6,4 @@ pub mod secrets;
 pub mod store;
 pub mod types;
 pub mod biometry;
+pub mod master_password;
