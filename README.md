@@ -49,7 +49,7 @@ Search uses SQLite **FTS5** + window-title indexing — you find clips by *where
 | Indexes window titles for context-search | ✗ | ✗ | ✓ |
 | Detects secrets at capture (252 gitleaks rules) | ✗ | ✗ | ✓ |
 | Encrypts secrets at rest with Touch ID gate | ✗ | ✗ | ✓ |
-| Standalone (no companion app required) | n/a | ✗ | ✓ |
+| Standalone binary (no runtime needed) | n/a | ✗ | ✓ macOS + Linux |
 | `.mcpb` one-click install | n/a | ✗ | ✓ |
 
 The other ~20 `clipboard-mcp` repos on GitHub only read the *current* clipboard. None capture history.
@@ -78,7 +78,7 @@ claude mcp add -s user clipboard-history -- ./ext/server/clipboard-history-mcp s
 ./ext/server/clipboard-history-mcp install
 ```
 
-### From source
+### From source (macOS)
 
 Requirements: Rust 1.95+, macOS 13+.
 
@@ -88,6 +88,36 @@ cd clipboard-history-mcp
 cargo build --release
 ./target/release/clipboard-history-mcp install                                 # start daemon
 claude mcp add -s user clipboard-history -- "$(pwd)/target/release/clipboard-history-mcp" serve
+```
+
+### Linux (X11; Wayland partial)
+
+Requirements: a working Secret Service implementation (GNOME Keyring or KWallet — comes with most desktop installs), `xvfb` not required for normal use (only for headless CI).
+
+```bash
+git clone https://github.com/d-khomenko/clipboard-history-mcp
+cd clipboard-history-mcp
+cargo build --release
+
+# Set a master password (used to wrap your AES master key)
+./target/release/clipboard-history-mcp migrate-v2
+
+# Install systemd user service
+./target/release/clipboard-history-mcp install
+# Optional: keep daemon running after logout
+./target/release/clipboard-history-mcp install --linger
+
+# Register with Claude Code
+claude mcp add -s user clipboard-history -- "$(pwd)/target/release/clipboard-history-mcp" serve
+```
+
+**Wayland note:** clipboard read/write works on Wayland via `arboard`'s portal handling. Window-title capture (opt-in via `CLIPBOARD_CAPTURE_WINDOW_TITLE=1`) currently only works on X11; Wayland support is deferred to v0.4.x once `xdg-desktop-portal` window-title APIs are widely shipped.
+
+**1Password / Bitwarden:** add app names to `CLIPBOARD_IGNORE_APPS` so password-manager paste events are skipped:
+
+```bash
+CLIPBOARD_IGNORE_APPS="1Password,Bitwarden,KeePassXC" \
+  ./target/release/clipboard-history-mcp install
 ```
 
 ---
