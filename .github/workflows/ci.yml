@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, v3-rust]
+    branches: [main, v4-linux]
   pull_request:
 
 env:
@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, macos-13]
+        os: [macos-13, macos-14, ubuntu-22.04, ubuntu-24.04]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -23,48 +23,34 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-darwin,x86_64-apple-darwin
+          components: rustfmt,clippy
 
-      - name: Cache Cargo registry + build
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
+      - uses: Swatinem/rust-cache@v2
 
-      - name: cargo check
-        run: cargo check
+      - name: Install Linux deps
+        if: contains(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libdbus-1-dev libxcb1-dev pkg-config xvfb gnome-keyring
 
-      - name: cargo test
-        run: cargo test --workspace
+      - name: cargo fmt --check
+        run: cargo fmt -- --check
 
-  fmt:
-    name: Rustfmt
-    runs-on: macos-14
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
-      - run: cargo fmt --all -- --check
+      - name: cargo clippy
+        run: cargo clippy --all-targets -- -D warnings
 
-  clippy:
-    name: Clippy
-    runs-on: macos-14
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-clippy-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-clippy-
-      - run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: cargo test (macOS)
+        if: startsWith(matrix.os, 'macos')
+        run: cargo test --release
+
+      - name: cargo test (Linux, headless)
+        if: contains(matrix.os, 'ubuntu')
+        shell: bash
+        run: |
+          eval $(dbus-launch --sh-syntax)
+          eval $(echo -n "" | gnome-keyring-daemon --unlock)
+          eval $(echo -n "" | gnome-keyring-daemon --start --components=secrets)
+          export DISPLAY=:99
+          Xvfb :99 -screen 0 1024x768x24 &
+          sleep 2
+          cargo test --release
