@@ -1,9 +1,9 @@
 [package]
 name = "clipboard-history-mcp"
-version = "0.3.0-alpha.0"
+version = "0.4.0-alpha.0"
 edition = "2021"
 rust-version = "1.95"
-description = "Type-aware, secret-safe macOS clipboard history exposed to Claude via MCP."
+description = "Type-aware, secret-safe clipboard history exposed to Claude via MCP. macOS + Linux."
 license = "MIT"
 authors = ["Dmytro Khomenko"]
 repository = "https://github.com/d-khomenko/clipboard-history-mcp"
@@ -18,44 +18,58 @@ path = "src/main.rs"
 [dependencies]
 rmcp                       = { version = "1.6", features = ["server", "macros", "transport-io", "local"] }
 tokio                      = { version = "1.52", features = ["full"] }
-objc2                      = "0.6"
-objc2-app-kit              = { version = "0.3", features = ["NSPasteboard", "NSWorkspace", "NSRunningApplication"] }
-objc2-foundation           = "0.3"
-objc2-local-authentication = { version = "0.3", features = ["block2"] }
-block2                     = "0.6"
-security-framework         = { version = "3.7", features = ["OSX_10_15"] }
-security-framework-sys     = "2.12"
-accessibility              = "0.1"
+
+# Cross-platform clipboard / keyring / paths / window
+arboard                    = "3"
+keyring                    = "4"
+keyring-core               = "1"
+directories-next           = "2"
+active-win-pos-rs          = "0.8"
+
+# Storage & crypto
 rusqlite                   = { version = "0.39", features = ["bundled"] }
 aes-gcm                    = "0.10"
+argon2                     = "0.5"
+rand                       = "0.8"
+once_cell                  = "1.20"
+regex                      = "1.11"
+
+# Serialization / config
 serde                      = { version = "1", features = ["derive"] }
 serde_json                 = "1"
 toml                       = "1.1"
+
+# CLI & logging
 clap                       = { version = "4.6", features = ["derive"] }
 tracing                    = "0.1"
 tracing-subscriber         = { version = "0.3", features = ["env-filter"] }
+
+# Utilities
 anyhow                     = "1"
 thiserror                  = "2"
 schemars                   = "0.9"
 sha2                       = "0.10"
 uuid                       = { version = "1", features = ["v4"] }
 hex                        = "0.4"
-rand                       = "0.8"
-once_cell                  = "1.20"
-regex                      = "1.11"
-ctrlc                      = "3"
 url                        = "2.5"
 libc                       = "0.2"
+ctrlc                      = "3"
+rpassword                  = "7"
+
+# macOS-only
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-local-authentication = "0.3"
+block2                     = "0.6"
+
+# Linux-only
+[target.'cfg(target_os = "linux")'.dependencies]
+x11rb                      = "0.13"
 
 [dev-dependencies]
 tempfile = "3"
 
 [profile.release]
 opt-level = 3
-lto = "thin"
+lto = "fat"
 strip = "symbols"
-codegen-units = 4
-
-# Original settings (re-enable for distribution builds):
-# lto = "fat"
-# codegen-units = 1
+codegen-units = 1
