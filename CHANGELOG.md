@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.0-alpha.0] — 2026-05-06
+
+### Added
+- **Obsidian vault mirror** — daemon can auto-export every non-secret clip to a configured Obsidian vault. Sidecar `.md` files under `<vault>/clipboard/YYYY-MM/<id>-<kind>-<slug>.md` plus daily-note bullets in `<vault>/daily/YYYY-MM-DD.md`. Configure with `--vault PATH` at install time, or `CLIPBOARD_VAULT_PATH=...` env var. Secrets are never mirrored.
+- New env var: `CLIPBOARD_VAULT_PATH`
+- New CLI flag: `--vault PATH` on `install`
+
+### Changed
+- `chrono` 0.4 added as a dep (lean: `clock + std` features only).
+
+### Notes
+- Vault writes are atomic (tmp + fsync + rename) to avoid Obsidian iCloud / Sync race conditions.
+- Bidirectional sync, retroactive backfill, custom templates: out of scope. See [vault-mirror design spec](docs/superpowers/specs/2026-05-06-vault-mirror-design.md).
+
 ## [0.4.0-alpha.0] — 2026-05-06
 
 ### Added

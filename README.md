@@ -120,6 +120,18 @@ CLIPBOARD_IGNORE_APPS="1Password,Bitwarden,KeePassXC" \
   ./target/release/clipboard-history-mcp install
 ```
 
+### Auto-mirror to Obsidian vault (optional)
+
+If you also use Obsidian, the daemon can write a sidecar `.md` for every captured clip plus a daily-note timeline entry. Configure at install time:
+
+```bash
+clipboard-history-mcp install --vault ~/Documents/Obsidian/MyVault
+```
+
+Result: every non-secret clip lands as `<vault>/clipboard/YYYY-MM/<id>-<kind>-<slug>.md` with frontmatter (kind, source, captured-at), and a bullet appended to `<vault>/daily/YYYY-MM-DD.md` linking back to the sidecar. Secrets are **never** mirrored — they stay encrypted in the SQLite vault.
+
+The daemon owns the `## Clipboard captures` H2 section in your daily notes — append-only, idempotent. You can write anything else above or below it.
+
 ---
 
 ## Try asking Claude
@@ -160,6 +172,7 @@ Set env vars in the launchd plist (`install` writes them) or via `claude mcp add
 | `CLIPBOARD_IGNORE_APPS` | *(empty)* | Comma-separated app display names to skip |
 | `CLIPBOARD_NEVER_STORE_SECRETS` | `0` | Paranoid mode — metadata only, no ciphertext |
 | `CLIPBOARD_DATA_DIR` | `~/Library/Application Support/clipboard-history-mcp` | Override data dir |
+| `CLIPBOARD_VAULT_PATH` | *(empty)* | Auto-mirror non-secret clips to this Obsidian vault directory (sidecar `.md` per clip + bullet in `daily/YYYY-MM-DD.md`). Set via `--vault PATH` at install time. |
 
 ---
 

@@ -17,6 +17,9 @@ pub struct WatcherOptions {
     pub ignore_apps: Vec<String>,
     pub never_store_secrets: bool,
     pub max_items: i64,
+    /// Configured Obsidian vault for daemon-side mirroring of non-secret
+    /// clips. `None` disables the feature; capture proceeds unchanged.
+    pub vault_mirror: Option<crate::core::vault::VaultMirror>,
 }
 
 impl Default for WatcherOptions {
@@ -27,6 +30,7 @@ impl Default for WatcherOptions {
             ignore_apps: vec![],
             never_store_secrets: false,
             max_items: 1000,
+            vault_mirror: None,
         }
     }
 }
@@ -105,7 +109,7 @@ fn tick(
         }
     } else {
         let cls = types::classify(&text);
-        store.add_clip(ClipInput {
+        let id = store.add_clip(ClipInput {
             text: text.clone(),
             primary_kind: cls.primary_kind.clone(),
             kinds: cls.kinds,
@@ -113,6 +117,24 @@ fn tick(
             window_title: ctx.window_title.clone(),
         })?;
         info!("clip captured: {} from {:?}", cls.primary_kind, ctx.front_app);
+
+        // Mirror to Obsidian vault if configured. Errors are logged + swallowed
+        // so a vault problem (perm denied, disk full, sync race) never breaks
+        // capture. Secrets do not reach this branch — they take add_secret above
+        // (structural invariant: mirror writes live only in the non-secret path).
+        if let Some(mirror) = &opts.vault_mirror {
+            let item = crate::core::vault::MirrorItem {
+                id,
+                primary_kind: &cls.primary_kind,
+                source_app: ctx.front_app.as_deref(),
+                window_title: ctx.window_title.as_deref(),
+                text: &text,
+                captured: chrono::Local::now(),
+            };
+            if let Err(e) = mirror.write(&item) {
+                warn!("vault mirror failed for clip {}: {}", id, e);
+            }
+        }
     }
 
     store.prune_oldest(opts.max_items)?;

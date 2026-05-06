@@ -27,6 +27,10 @@ pub enum Cmd {
         /// Linux only: enable systemd linger so the service survives logout
         #[arg(long)]
         linger: bool,
+        /// Auto-mirror non-secret clips to this Obsidian vault path.
+        /// Sets `CLIPBOARD_VAULT_PATH` env var on the daemon.
+        #[arg(long, value_name = "PATH")]
+        vault: Option<std::path::PathBuf>,
     },
     /// Uninstall daemon service
     Uninstall {

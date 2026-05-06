@@ -17,13 +17,19 @@ pub fn install_linux(opts: InstallOpts) -> Result<()> {
     let bin = std::env::current_exe()?;
 
     let template = include_str!("../../scripts/systemd.service.template");
+    // Empty string when no vault — leaves a blank line that systemd ignores.
+    let vault_env_line = match &opts.vault {
+        Some(p) => format!(r#"Environment="CLIPBOARD_VAULT_PATH={}""#, p.display()),
+        None => String::new(),
+    };
     let unit = template
         .replace("__BINARY__", bin.to_str().unwrap())
         .replace("__LOG__", log.to_str().unwrap())
         .replace(
             "__CAPTURE_WINDOW_TITLE__",
             if opts.window_titles { "1" } else { "0" },
-        );
+        )
+        .replace("__VAULT_ENV_LINE__", &vault_env_line);
     std::fs::write(&unit_path, unit)?;
 
     let s = Command::new("systemctl")
