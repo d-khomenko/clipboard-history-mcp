@@ -13,6 +13,8 @@ flowchart LR
 
 **One Rust binary.** No Node.js, no Swift toolchain, no other apps to install. Drag a `.mcpb` into Claude Desktop, done.
 
+![Demo: copy a URL, a JSON snippet, code, an OpenAI key — daemon classifies each, then Claude lists them in chat and unlocks the secret behind Touch ID.](docs/assets/demo.gif)
+
 ---
 
 ## What this gets you
