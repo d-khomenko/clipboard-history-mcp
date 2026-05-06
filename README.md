@@ -1,188 +1,246 @@
 # clipboard-history-mcp
 
-> **v0.3 — Rust rewrite.** Single self-contained binary, zero Node.js/npm runtime dependency, packaged as `.mcpb` for one-click install in Claude Desktop.
-
-Type-aware, secret-safe macOS clipboard history exposed to Claude via MCP.
+> Your clipboard, but Claude can read it. Type-classified, secret-encrypted, macOS-native.
 
 ```mermaid
 flowchart LR
-  U[You copy<br/>something] --> D[Rust daemon<br/>launchd-managed]
+  U[You ⌘C something] --> D[Rust daemon<br/>launchd-managed]
   D -->|classify + encrypt| DB[(SQLite + FTS5)]
   C[Claude] -->|MCP stdio| M[15 tools]
   M --> DB
   M -->|Touch ID| V[Vault<br/>AES-256-GCM]
 ```
 
-## Why
+**One Rust binary.** No Node.js, no Swift toolchain, no other apps to install. Drag a `.mcpb` into Claude Desktop, done.
 
-- **Maccy** is great as a clipboard manager but doesn't talk to LLMs.
-- The other ~20 `clipboard-mcp` repos on GitHub only read the *current* clipboard — no history.
-- `vlad-ds/maccy-clipboard-mcp` reads Maccy's DB but is tied to Maccy.
+---
 
-This project does three things none of the above do **together**:
+## What this gets you
 
-1. **Type-aware retrieval.** Every clip is classified at capture (`url`, `json`, `code:python`, `sql`, `secret:openai_api_key`, …) and exposed via filtered tools.
-2. **Secret-aware capture.** API keys, JWTs, AWS access keys, credit cards (252 patterns from gitleaks) are detected, encrypted at rest (AES-256-GCM, key in macOS Keychain), and never leak to Claude unless you call `unlock_secret(id, reason)` — which requires Touch ID.
-3. **Always-on background daemon** under launchd. History is captured even when Claude Code is closed.
+You're working in Claude. You've copied **47 things today** — URLs, JSON snippets, an OpenAI key from a dashboard, a SQL query from your DB tool, half a Stripe webhook payload. Now Claude can use any of them:
 
-## Comparison
+```
+You:  «Знайди той API ключ що я копіював з OpenAI dashboard вчора»
+Claude:  Found 1 secret matching "OpenAI" — kind: openai_api_key,
+         source: Safari, copied 14h ago. Last 4 chars: ab12.
+         To reveal, call unlock_secret(id=23, reason="...").
 
-|  | Maccy | maccy-clipboard-mcp | clipboard-history-mcp v3 |
-|---|---|---|---|
-| Captures clipboard | ✓ | (reads Maccy's DB) | ✓ |
-| Indexes window titles | ✗ | ✗ | ✓ (opt-in) |
-| Type-aware tools (URL / code / SQL / JSON) | ✗ | ✗ | ✓ |
-| Secret detection + Touch ID gate | ✗ | ✗ | ✓ |
-| Standalone binary (no runtime needed) | n/a | ✗ | ✓ |
-| GUI / hotkey | ✓ | ✗ | ✗ (use Maccy alongside) |
-| Packaged as .mcpb | n/a | ✗ | ✓ |
+You:  «Дай мені всі URL з GitHub які я відкривав»
+Claude:  Returns 12 unique GitHub URLs deduplicated by repo,
+         ranked by how often you pasted them back.
 
-## Quick install (Claude Desktop — .mcpb)
+You:  «У буфері була JSON-конфіга з Stripe — поверни її в кліпборд»
+Claude:  Found, restoring. ✓ ready to ⌘V.
 
-1. Download `clipboard-history-mcp.mcpb` from the [latest release](https://github.com/d-khomenko/clipboard-history-mcp/releases/latest).
-2. Open Claude Desktop → Settings → Extensions → "Install from file".
-3. Select the `.mcpb` file and confirm.
-
-The extension registers the MCP server automatically. Restart Claude Desktop, then ask:
-
-> *"List my recent clipboard URLs."*
-
-## Manual install (Claude Code / CLI)
-
-```bash
-# Download the latest release binary
-curl -L https://github.com/d-khomenko/clipboard-history-mcp/releases/latest/download/clipboard-history-mcp.mcpb \
-  -o clipboard-history-mcp.mcpb
-
-# Unpack (optional — to get the raw binary)
-unzip clipboard-history-mcp.mcpb -d clipboard-history-mcp-ext
-
-# Register with Claude Code
-claude mcp add -s user clipboard-history -- \
-  ./clipboard-history-mcp-ext/server/clipboard-history-mcp serve
-
-# Install the launchd daemon (captures clipboard in background)
-./clipboard-history-mcp-ext/server/clipboard-history-mcp install
+You:  «Який код я копіював з ChatGPT за останні 2 години?»
+Claude:  3 Python snippets, 1 SQL query, 1 shell command.
 ```
 
-## Build from source
+Search uses SQLite **FTS5** + window-title indexing — you find clips by *where* you copied them, not just by content.
+
+---
+
+## Why nothing else does this
+
+| | [Maccy](https://maccy.app) | [maccy-clipboard-mcp](https://github.com/vlad-ds/maccy-clipboard-mcp) | clipboard-history-mcp |
+|---|---|---|---|
+| Captures clipboard | ✓ | (reads Maccy's DB) | ✓ |
+| Classifies clip type (URL/JSON/code/SQL/secret) | ✗ | ✗ | ✓ |
+| Indexes window titles for context-search | ✗ | ✗ | ✓ |
+| Detects secrets at capture (252 gitleaks rules) | ✗ | ✗ | ✓ |
+| Encrypts secrets at rest with Touch ID gate | ✗ | ✗ | ✓ |
+| Standalone (no companion app required) | n/a | ✗ | ✓ |
+| `.mcpb` one-click install | n/a | ✗ | ✓ |
+
+The other ~20 `clipboard-mcp` repos on GitHub only read the *current* clipboard. None capture history.
+
+---
+
+## Install
+
+### One-click — Claude Desktop
+
+1. Download `clipboard-history-mcp.mcpb` from the [latest release](https://github.com/d-khomenko/clipboard-history-mcp/releases/latest).
+2. Claude Desktop → Settings → Extensions → "Install from file" → pick the `.mcpb`.
+3. Restart Claude Desktop. Ask: *"List my recent clipboard URLs."*
+
+### Manual — Claude Code / CLI
+
+```bash
+curl -L https://github.com/d-khomenko/clipboard-history-mcp/releases/latest/download/clipboard-history-mcp.mcpb \
+  -o clipboard-history-mcp.mcpb
+unzip clipboard-history-mcp.mcpb -d ext
+
+# register MCP
+claude mcp add -s user clipboard-history -- ./ext/server/clipboard-history-mcp serve
+
+# install background daemon (captures even when Claude is closed)
+./ext/server/clipboard-history-mcp install
+```
+
+### From source
 
 Requirements: Rust 1.95+, macOS 13+.
 
 ```bash
 git clone https://github.com/d-khomenko/clipboard-history-mcp
 cd clipboard-history-mcp
-
-# Build universal binary + pack .mcpb
-bash scripts/pack-mcpb.sh
-
-# Install daemon
-./target/universal-apple-darwin/clipboard-history-mcp install
-
-# Add to Claude Code
-claude mcp add -s user clipboard-history -- \
-  "$(pwd)/target/universal-apple-darwin/clipboard-history-mcp" serve
+cargo build --release
+./target/release/clipboard-history-mcp install                                 # start daemon
+claude mcp add -s user clipboard-history -- "$(pwd)/target/release/clipboard-history-mcp" serve
 ```
+
+---
+
+## Try asking Claude
+
+Copy any of these prompts into Claude after install:
+
+```
+List my last 20 clipboard entries.
+
+Show me only the URLs I've copied today.
+
+Search my clipboard history for "anthropic".
+
+Find any code snippets in Python from the last 3 hours.
+
+How many secrets are in my clipboard vault, by kind?
+
+Pin the JSON I just copied — I'll need it again.
+
+What apps did I copy from most this week?
+
+Restore that GitHub PR link to my clipboard.
+```
+
+Claude picks the right tool from 15 available and answers directly.
+
+---
 
 ## Configuration
 
-All options are environment variables (passed via the launchd plist or `claude mcp add --env`):
+Set env vars in the launchd plist (`install` writes them) or via `claude mcp add --env KEY=val`:
 
-| Variable | Default | Purpose |
+| Variable | Default | What it does |
 |---|---|---|
 | `CLIPBOARD_POLL_MS` | `1500` | Watcher poll interval (ms) |
 | `CLIPBOARD_HISTORY_MAX` | `1000` | Ring-buffer size |
-| `CLIPBOARD_CAPTURE_WINDOW_TITLE` | `0` | Opt-in to window title capture (requires Accessibility permission) |
-| `CLIPBOARD_IGNORE_APPS` | *(empty)* | Comma-separated list of app display names to skip |
-| `CLIPBOARD_NEVER_STORE_SECRETS` | `0` | Paranoid mode — store metadata only, no ciphertext |
-| `CLIPBOARD_DATA_DIR` | `~/Library/Application Support/clipboard-history-mcp` | Override data directory |
-| `CLIPBOARD_DB_PATH` | `$CLIPBOARD_DATA_DIR/history.db` | Override database path |
+| `CLIPBOARD_CAPTURE_WINDOW_TITLE` | `0` | Capture window titles (needs Accessibility permission) |
+| `CLIPBOARD_IGNORE_APPS` | *(empty)* | Comma-separated app display names to skip |
+| `CLIPBOARD_NEVER_STORE_SECRETS` | `0` | Paranoid mode — metadata only, no ciphertext |
+| `CLIPBOARD_DATA_DIR` | `~/Library/Application Support/clipboard-history-mcp` | Override data dir |
 
-## MCP Tools (15)
+---
+
+## Tools (15)
 
 ### Read
-| Tool | Description |
+
+| | |
 |---|---|
-| `list_history` | Paginated clipboard history (newest first) |
-| `get_item(id)` | Single clip by ID |
-| `search_history(q)` | Full-text search (SQLite FTS5) |
-| `get_urls` | All URL clips |
-| `get_code(language?)` | Code clips, optionally filtered by language |
-| `get_json` | JSON clips |
-| `get_secrets_index` | Encrypted-secret metadata (no plaintext) |
-| `unlock_secret(id, reason)` | Decrypt a secret after Touch ID authentication |
-| `get_stats` | DB stats: counts by type, DB size, oldest/newest |
-| `daemon_status` | Daemon PID, uptime, last capture time |
+| `list_history(limit?, kind?, source_app?, since?, pinned_only?)` | Paginated history, newest first |
+| `get_item(id)` | Single clip by id |
+| `search_history(query, limit?)` | FTS5 BM25 across preview + window title |
+| `get_urls(limit?)` | URL clips, deduped by hostname |
+| `get_code(language?, limit?)` | Code clips, optional language filter |
+| `get_json(limit?)` | JSON clips with parsed structure |
+| `get_secrets_index(kind?)` | Secret metadata — **no values** |
+| `unlock_secret(id, reason)` | Decrypt one secret — **gated by Touch ID** |
+| `get_stats` | Counts by kind, oldest/newest, db size |
+| `daemon_status` | PID, running state |
 
 ### Write
-| Tool | Description |
+
+| | |
 |---|---|
-| `copy_item(id)` | Write a clip back to the clipboard |
-| `pin_item(id)` | Pin/unpin a clip (excluded from `clear_history`) |
-| `tag_item(id, tags)` | Set freeform tags on a clip |
-| `delete_item(id)` | Permanently delete a clip |
-| `clear_history` | Delete all unpinned clips |
+| `copy_item(id)` | Restore a clip back to system clipboard |
+| `pin_item(id, pinned)` | Pin so it survives `clear_history` |
+| `tag_item(id, tag, remove?)` | Free-form tagging |
+| `delete_item(id)` | Hard delete |
+| `clear_history(scope)` | `'all' \| 'older_than_days:N' \| 'kind:K'` |
 
-## CLI subcommands
+---
+
+## CLI
 
 ```
-clipboard-history-mcp <subcommand>
-
-Subcommands:
-  daemon       Run the clipboard watcher (managed by launchd)
-  serve        Start MCP stdio server (used by Claude Desktop / claude mcp)
-  install      Write + load the launchd plist (daemon auto-starts on login)
-  uninstall    Unload + remove plist (optionally keeps data with --keep-data)
-  status       Print JSON: dataDir, dbPath, dbExists, dbSizeBytes, daemonPid
-  vault list   List encrypted secrets (metadata only)
-  vault unlock <id>  Decrypt a secret (prompts Touch ID)
-  doctor       Diagnose common issues (permissions, DB health, plist status)
-  migrate-v2   Validate/import v2 Node.js data (no-op if no v2 data found)
+clipboard-history-mcp daemon         # run watcher (managed by launchd)
+clipboard-history-mcp serve          # MCP stdio server (Claude spawns this)
+clipboard-history-mcp install [--window-titles]
+clipboard-history-mcp uninstall [--keep-data]
+clipboard-history-mcp status         # JSON: daemon pid, db size, etc.
+clipboard-history-mcp vault list     # secret metadata
+clipboard-history-mcp vault unlock N # decrypt secret #N (Touch ID)
+clipboard-history-mcp doctor         # diagnose perms/Keychain/pasteboard
+clipboard-history-mcp migrate-v2     # validate v0.2.x SQLite (no-op import)
 ```
+
+---
+
+## Security model
+
+- **Secrets detected at capture** — 252+ gitleaks regex patterns + RFC 7519 JWT + Luhn-validated cards.
+- **Encryption at rest** — AES-256-GCM with a 32-byte master key in macOS Keychain.
+- **Touch ID gate** — `unlock_secret` calls `LAContext.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics)`. 5-minute auth cache per session.
+- **LLM-blind by default** — `list_history` and `search_history` return secret rows with `text: null` and `preview: "[REDACTED:kind]"`. The only path that returns plaintext is `unlock_secret(id, reason)`, and the `reason` argument is mandatory and audit-logged.
+- **Paranoid mode** — `CLIPBOARD_NEVER_STORE_SECRETS=1` keeps metadata only; ciphertext never written.
+- **Transient-type respect** — clips marked by password managers (1Password, Bitwarden) with `org.nspasteboard.ConcealedType` are never captured.
+
+---
 
 ## Architecture
 
 ```
 src/
 ├── main.rs               # binary entry; clap subcommand dispatch
-├── lib.rs                # re-exports for integration tests
 ├── core/
 │   ├── db.rs             # SQLite WAL + migrations + FTS5
 │   ├── store.rs          # add/list/search/delete clips
-│   ├── crypto.rs         # AES-256-GCM + Keychain biometric ACL
-│   ├── types.rs          # clip classifier (url/json/sql/shell/code:lang)
+│   ├── crypto.rs         # AES-256-GCM + Keychain
+│   ├── types.rs          # classifier (url/json/sql/shell/code:lang)
 │   ├── secrets.rs        # gitleaks rules + JWT + Luhn
 │   ├── pasteboard.rs     # NSPasteboard via objc2
 │   └── biometry.rs       # LAContext Touch ID gate
-├── daemon/
-│   ├── watcher.rs        # poll loop on pinned thread
-│   └── context.rs        # frontmost app + window title
-├── mcp/
-│   └── tools.rs          # 15 MCP tools via rmcp
-└── cli/
-    ├── install.rs        # launchd plist write + load
-    ├── uninstall.rs
-    ├── status.rs
-    ├── vault.rs
-    ├── doctor.rs
-    └── migrate_v2.rs
+├── daemon/{watcher,context}.rs    # poll loop on pinned thread
+├── mcp/tools.rs                   # 15 MCP tools via rmcp
+└── cli/{install,uninstall,status,vault,doctor,migrate_v2}.rs
 ```
 
-**Tech stack:** Rust 1.95 · rmcp 1.6 · tokio · objc2 · rusqlite (bundled FTS5) · aes-gcm · security-framework · clap 4
+**Tech stack:** Rust 1.95 · `rmcp` 1.6 · `tokio` · `objc2` · `rusqlite` (bundled FTS5) · `aes-gcm` · `security-framework` · `objc2-local-authentication` · `clap` 4
 
-## Security model
+---
 
-- Secrets are **detected at capture** using 252+ gitleaks patterns, JWT structure detection, and Luhn-validated card numbers.
-- Detected secrets are stored **AES-256-GCM encrypted**. The master key lives in the macOS Keychain with a biometric ACL — only Touch ID (or device passcode) can release it.
-- `unlock_secret` is the only tool that ever decrypts. It calls `LAContext.evaluatePolicy` before returning plaintext.
-- Set `CLIPBOARD_NEVER_STORE_SECRETS=1` to store secret metadata only (no ciphertext at all).
+## FAQ
+
+**Does this run on Linux/Windows?**  
+Not yet. Phase 2. The pasteboard layer is macOS-specific (`NSPasteboard`); cross-platform abstraction is on the roadmap.
+
+**What if I copy a 50MB blob?**  
+Currently captured. A `CLIPBOARD_MAX_BYTES` guard is on the v0.3.x roadmap.
+
+**Can Claude leak my secrets?**  
+Not without you (a) installing this tool, (b) approving Touch ID, (c) the LLM choosing to call `unlock_secret` with a `reason` that gets logged. The `text` field for secret rows is always `null` in `list_history`/`search_history`.
+
+**Does it sync across Macs?**  
+No. v0.3 is per-Mac. iCloud/Git E2E sync is Phase 2.
+
+**Can I use this with Maccy already running?**  
+Yes. They don't conflict — Maccy provides UI, this provides the MCP layer. Both poll `NSPasteboard.changeCount` independently.
+
+**What about [other clipboard manager]?**  
+Same answer — there's no exclusive lock. Worst case, both store the same clip; storage cost is trivial.
+
+---
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md).
+See [CHANGELOG.md](CHANGELOG.md). Latest: [v0.3.0-alpha.0](https://github.com/d-khomenko/clipboard-history-mcp/releases/tag/v0.3.0-alpha.0).
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). PRs welcome — issues with macOS 13/14 reproductions especially.
 
 ## License
 
-MIT.
-
-`vendor/gitleaks.toml` is the gitleaks rule catalog (MIT) — see `vendor/README.md`.
+MIT. `vendor/gitleaks.toml` is the gitleaks rule catalog (also MIT) — see `vendor/README.md`.
