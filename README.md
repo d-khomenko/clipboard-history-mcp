@@ -2,7 +2,7 @@
 
 > Your clipboard, but Claude can read it. Type-classified, secret-encrypted, macOS-native.
 
-![Three squares: a small solid green square (Daemon idle, ~1 mW) sits inside a slightly larger dashed green outline (Daemon burst, ~30 mW). To the right, a 100x100 solid red square (Chrome tab with a Google Doc, idle, ~100 mW) sits inside a 225x225 dashed red outline (the same tab during autosave / collab-sync, ~500 mW). Square area is proportional to power.](docs/assets/power-squares.svg)
+![Power-draw comparison: a small green Daemon (idle ~1 mW solid, burst ~30 mW dashed) shares a bottom baseline and a vertical edge with a much larger red Chrome tab (Google Doc — idle ~100 mW solid, burst ~500 mW dashed). Square area is proportional to power.](docs/assets/power-squares.svg)
 
 > A whole Chrome tab idling on a Google Doc draws ~100× more power than the daemon — and that's before you've started typing. Square area is proportional to average power; dashed = transient peak during work.
 
