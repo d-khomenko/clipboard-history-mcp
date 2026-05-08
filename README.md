@@ -272,7 +272,7 @@ For context — every visible bar below is **at least 300× the daemon**, on a l
 ```mermaid
 xychart-beta
     title "Average power draw vs typical background apps — log10(mW)"
-    x-axis ["clipboard daemon" "static Chrome tab" "Spotify" "JS-heavy tab" "Slack desktop" "YouTube tab" "Xcode build"]
+    x-axis ["clipboard daemon", "static Chrome tab", "Spotify", "JS-heavy tab", "Slack desktop", "YouTube tab", "Xcode build"]
     y-axis "log10 mW" 0 --> 5
     bar [0, 2.5, 3.2, 3.3, 3.5, 3.9, 4.5]
 ```
