@@ -1,12 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200" width="400" height="200" role="img" aria-label="Power-draw comparison: a small solid green square (daemon idle, ~1 mW) sits inside a larger dashed green outline (daemon peak during a single capture burst, ~30 mW). To the right, a 100x100 solid red square represents an idle Chrome tab (~100 mW). Square area is proportional to power.">
-  <rect x="62.5" y="32.5" width="55" height="55" fill="none" stroke="#16a34a" stroke-width="1.5" stroke-dasharray="5,3"/>
-  <rect x="85" y="55" width="10" height="10" fill="#16a34a"/>
-  <text x="90" y="135" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13" font-weight="600">daemon</text>
-  <text x="90" y="151" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11" fill="#666">~1 mW idle · ~30 mW burst</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 340" width="400" height="340" role="img" aria-label="Power-draw comparison: a small solid green square (Daemon idle, ~1 mW) sits inside a slightly larger dashed green outline (Daemon burst, ~30 mW). To the right, a 100x100 solid red square (Chrome tab with a Google Doc, idle, ~100 mW) sits inside a 225x225 dashed red outline (the same tab during autosave / collab-sync, ~500 mW). Square area is proportional to power.">
+  <rect x="30" y="130" width="55" height="55" fill="none" stroke="#16a34a" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <rect x="52.5" y="152.5" width="10" height="10" fill="#16a34a"/>
+  <text x="57.5" y="210" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13" font-weight="600">Daemon</text>
+  <text x="57.5" y="226" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11" fill="#666">~1 mW idle · ~30 mW burst</text>
 
-  <rect x="200" y="10" width="100" height="100" fill="#dc2626"/>
-  <text x="250" y="135" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13" font-weight="600">Chrome tab (idle)</text>
-  <text x="250" y="151" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11" fill="#666">~100 mW</text>
+  <rect x="140" y="15" width="225" height="225" fill="none" stroke="#dc2626" stroke-width="2" stroke-dasharray="6,4"/>
+  <rect x="202.5" y="77.5" width="100" height="100" fill="#dc2626"/>
+  <text x="252.5" y="265" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13" font-weight="600">Chrome tab (Google Doc)</text>
+  <text x="252.5" y="281" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11" fill="#666">~100 mW idle · ~500 mW burst</text>
 
-  <text x="200" y="190" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="10" fill="#999">Square area is proportional to power. Dashed outline = transient peak on each ⌘C tick (~30 ms).</text>
+  <text x="200" y="325" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="10" fill="#999">Square area is proportional to power. Dashed outline = transient peak during work (capture tick / autosave).</text>
 </svg>
