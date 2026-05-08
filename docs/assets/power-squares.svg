@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200" width="400" height="200" role="img" aria-label="Two squares comparing power draw — daemon (~1 mW) and an idle Chrome tab (~100 mW). The Chrome tab square is 100 times the area of the daemon square.">
+  <rect x="40" y="105" width="10" height="10" fill="#dc2626"/>
+  <text x="45" y="135" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13" font-weight="600">daemon</text>
+  <text x="45" y="151" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11" fill="#666">~1 mW</text>
+
+  <rect x="200" y="15" width="100" height="100" fill="#dc2626"/>
+  <text x="250" y="135" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13" font-weight="600">Chrome tab (idle)</text>
+  <text x="250" y="151" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="11" fill="#666">~100 mW (100× the daemon)</text>
+
+  <text x="200" y="180" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="10" fill="#999">Square area is proportional to average power draw on Apple Silicon.</text>
+</svg>
