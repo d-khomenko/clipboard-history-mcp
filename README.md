@@ -4,8 +4,6 @@
 
 ![Power-draw comparison: a small green Daemon (idle ~1 mW solid, burst ~30 mW dashed) shares a bottom baseline and a vertical edge with a much larger red Chrome tab (Google Doc — idle ~100 mW solid, burst ~500 mW dashed). Square area is proportional to power.](docs/assets/power-squares.svg)
 
-> A whole Chrome tab idling on a Google Doc draws ~100× more power than the daemon — and that's before you've started typing. Square area is proportional to average power; dashed = transient peak during work.
-
 ```mermaid
 flowchart LR
   U[You ⌘C something] --> D[Rust daemon<br/>launchd-managed]
