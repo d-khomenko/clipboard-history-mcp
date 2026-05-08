@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **README: Performance section** — measured idle footprint on Apple Silicon (0.05 % CPU, ~24 MB RSS, ~1 mW avg power, ~1 % battery per 3 weeks of continuous run) with a log-scale Mermaid bar chart comparing against typical background apps (Chrome tabs, Slack, Spotify, Xcode build).
+
 ## [0.5.0-alpha.0] — 2026-05-06
 
 ### Added
