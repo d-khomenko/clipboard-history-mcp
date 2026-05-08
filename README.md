@@ -6,6 +6,7 @@
 flowchart LR
   U[You ⌘C something] --> D[Rust daemon<br/>launchd-managed]
   D -->|classify + encrypt| DB[(SQLite + FTS5)]
+  D -. non-secret clips .-> O[Obsidian vault<br/>optional]
   C[Claude] -->|MCP stdio| M[15 tools]
   M --> DB
   M -->|Touch ID| V[Vault<br/>AES-256-GCM]
