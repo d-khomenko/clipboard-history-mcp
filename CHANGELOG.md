@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **`clean-legacy` CLI subcommand** — removes the orphaned macOS data directory (`~/Library/Application Support/clipboard-history-mcp/`) left behind when v0.3.x → v0.4 reinstalls created the new qualified path (`kz.me.clipboard-history-mcp/`) without the existing dir being moved by `migrate-v2`. Interactive confirmation by default; pass `-y` / `--yes` to skip. No-op on Linux (every release used the qualified XDG path) and when the legacy dir does not exist.
+
+### Fixed
+- **README FAQ staleness** — the "Does this run on Linux/Windows?" answer was still "Not yet. Phase 2.", written before the v0.4 Linux port shipped. Updated to reflect current state (Linux supported with X11 + Wayland; Windows still pending). Also dropped two `v0.3.x roadmap` / `v0.3 is per-Mac` references and rewrote the cross-Mac sync answer to mention the v0.5 vault-mirror path.
+
 ### Fixed
 - **Daemon refused to start as a launchd/systemd service after `migrate-v2`.** `run_daemon` always called `get_or_create_master_key`, which prompts for the master password on v2-wrapped installs — but launchd/systemd have no controlling TTY, so the prompt failed and the service died at boot. The watcher only needs the key to encrypt secrets, and `CLIPBOARD_NEVER_STORE_SECRETS=1` already drops every secret-classified clip before encrypt is invoked. The daemon now reads that env var first and skips the master-key load entirely in paranoid mode, letting v2-migrated users run the daemon non-interactively.
 

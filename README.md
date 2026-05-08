@@ -220,6 +220,7 @@ clipboard-history-mcp vault list     # secret metadata
 clipboard-history-mcp vault unlock N # decrypt secret #N (Touch ID)
 clipboard-history-mcp doctor         # diagnose perms/Keychain/pasteboard
 clipboard-history-mcp migrate-v2     # validate v0.2.x SQLite (no-op import)
+clipboard-history-mcp clean-legacy [-y]  # remove the v0.3.x macOS data dir (~/Library/Application Support/clipboard-history-mcp/)
 ```
 
 ---
@@ -290,16 +291,16 @@ Linux numbers untested but expected similar order of magnitude (`arboard` pollin
 ## FAQ
 
 **Does this run on Linux/Windows?**  
-Not yet. Phase 2. The pasteboard layer is macOS-specific (`NSPasteboard`); cross-platform abstraction is on the roadmap.
+Linux: **yes** since v0.4 (X11 + Wayland clipboard via `arboard`; window-title capture is X11-only for now). See the [Linux install section](#linux-x11-wayland-partial) above. Windows: not yet — `arboard` works there, but the launchd/systemd-style installer hasn't been ported. PRs welcome.
 
 **What if I copy a 50MB blob?**  
-Currently captured. A `CLIPBOARD_MAX_BYTES` guard is on the v0.3.x roadmap.
+Currently captured. A `CLIPBOARD_MAX_BYTES` guard is on the roadmap.
 
 **Can Claude leak my secrets?**  
 Not without you (a) installing this tool, (b) approving Touch ID, (c) the LLM choosing to call `unlock_secret` with a `reason` that gets logged. The `text` field for secret rows is always `null` in `list_history`/`search_history`.
 
 **Does it sync across Macs?**  
-No. v0.3 is per-Mac. iCloud/Git E2E sync is Phase 2.
+No native cross-device sync — the SQLite vault stays local. If you set `--vault PATH` to point inside a synced Obsidian vault (iCloud, git, Syncthing, etc.), the per-clip sidecar markdown files follow your sync — but **secrets are never mirrored** to the vault, so password-protected items remain on the originating machine.
 
 **Can I use this with Maccy already running?**  
 Yes. They don't conflict — Maccy provides UI, this provides the MCP layer. Both poll `NSPasteboard.changeCount` independently.
