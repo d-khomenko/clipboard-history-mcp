@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
 
+pub mod clean_legacy;
 pub mod doctor;
 pub mod install;
 pub mod migrate_v2;
@@ -50,4 +51,12 @@ pub enum Cmd {
     },
     /// Migrate from v2 SQLite (no-op for matching schema)
     MigrateV2,
+    /// Remove the legacy v0.3.x macOS data directory
+    /// (`~/Library/Application Support/clipboard-history-mcp/`).
+    /// No-op on Linux and when the legacy directory does not exist.
+    CleanLegacy {
+        /// Skip the confirmation prompt and delete immediately.
+        #[arg(short, long)]
+        yes: bool,
+    },
 }
