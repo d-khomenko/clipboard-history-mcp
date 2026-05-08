@@ -46,9 +46,23 @@ async fn main() -> Result<()> {
 async fn run_daemon() -> Result<()> {
     use clipboard_history_mcp::daemon::watcher::{run_watcher, WatcherOptions};
 
-    let key = get_or_create_master_key(|| {
-        clipboard_history_mcp::core::master_password::prompt_password("Master password (5-min cache): ")
-    })?;
+    let never_store_secrets =
+        std::env::var("CLIPBOARD_NEVER_STORE_SECRETS").as_deref() == Ok("1");
+
+    // Skip the master-key load in paranoid mode: the watcher drops every
+    // secret-classified clip before reaching the encrypt path, so the key
+    // is never used. Loading it would force an interactive password prompt
+    // on v2-migrated installs, which fails for launchd/systemd services
+    // that have no controlling TTY.
+    let key = if never_store_secrets {
+        [0u8; 32]
+    } else {
+        get_or_create_master_key(|| {
+            clipboard_history_mcp::core::master_password::prompt_password(
+                "Master password (5-min cache): ",
+            )
+        })?
+    };
     let path = db_path();
     let stop = Arc::new(AtomicBool::new(false));
 
@@ -72,8 +86,7 @@ async fn run_daemon() -> Result<()> {
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
             .collect(),
-        never_store_secrets: std::env::var("CLIPBOARD_NEVER_STORE_SECRETS").as_deref()
-            == Ok("1"),
+        never_store_secrets,
         max_items: std::env::var("CLIPBOARD_HISTORY_MAX")
             .ok()
             .and_then(|s| s.parse().ok())
