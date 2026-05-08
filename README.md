@@ -256,6 +256,35 @@ src/
 
 ---
 
+## Performance
+
+Daemon idle footprint, measured on Apple Silicon with default `CLIPBOARD_POLL_MS=1500` and vault-mirror enabled:
+
+| Metric | Value | How measured |
+|---|---|---|
+| **CPU steady-state** | **0.05 %** | `ps` cumulative CPU-time delta over 60 s (0.03 s / 60 s) |
+| **Memory (RSS)** | **~24 MB** | `ps -o rss` |
+| **Power draw (avg)** | **~1 mW** | 0.05 % of an E-core (~1 W full tilt) running continuously |
+| **Battery impact** | **~1 % per 3 weeks** | 1 mW × 504 h = 0.5 Wh on a 52 Wh MacBook Air battery, assuming 24/7 continuous run |
+
+For context — every visible bar below is **at least 300× the daemon**, on a log-10 scale (each y-axis unit = 10× more power):
+
+```mermaid
+xychart-beta
+    title "Average power draw vs typical background apps — log10(mW)"
+    x-axis ["clipboard daemon" "static Chrome tab" "Spotify" "JS-heavy tab" "Slack desktop" "YouTube tab" "Xcode build"]
+    y-axis "log10 mW" 0 --> 5
+    bar [0, 2.5, 3.2, 3.3, 3.5, 3.9, 4.5]
+```
+
+Reading: `0` = 1 mW (this daemon), `2` = 100 mW, `3` = 1 W, `4.5` = ~30 W. An Xcode build pulls **five orders of magnitude** more than the clipboard daemon; a single Slack tab pulls about three.
+
+Burst cost on each `⌘C`: ~30 ms tick at 1–3 % CPU (secret-classifier regexes + FTS5 index + AES-GCM + optional vault file write), then back to idle. Activity Monitor's _Energy Impact_ column reports ~0 — below its detection threshold.
+
+Linux numbers untested but expected similar order of magnitude (`arboard` polling + SQLite is portable).
+
+---
+
 ## FAQ
 
 **Does this run on Linux/Windows?**  
