@@ -270,14 +270,15 @@ Daemon idle footprint, measured on Apple Silicon with default `CLIPBOARD_POLL_MS
 For context — every visible bar below is **at least 300× the daemon**, on a log-10 scale (each y-axis unit = 10× more power):
 
 ```mermaid
+%%{init: {"themeVariables": {"xyChart": {"plotColorPalette": "#dc2626"}}}}%%
 xychart-beta
     title "Average power draw vs typical background apps — log10(mW)"
-    x-axis ["clipboard daemon", "static Chrome tab", "Spotify", "JS-heavy tab", "Slack desktop", "YouTube tab", "Xcode build"]
-    y-axis "log10 mW" 0 --> 5
-    bar [0, 2.5, 3.2, 3.3, 3.5, 3.9, 4.5]
+    x-axis ["clipboard daemon", "Chrome tab", "Spotify", "JS-heavy tab", "Slack desktop", "YouTube tab"]
+    y-axis "log10 mW" 0 --> 4
+    bar [0, 2.5, 3.2, 3.3, 3.5, 3.9]
 ```
 
-Reading: `0` = 1 mW (this daemon), `2` = 100 mW, `3` = 1 W, `4.5` = ~30 W. An Xcode build pulls **five orders of magnitude** more than the clipboard daemon; a single Slack tab pulls about three.
+Reading: `0` = 1 mW (this daemon), `2` = 100 mW, `3` = 1 W, `4` = 10 W. A YouTube tab pulls **nearly four orders of magnitude** more than the clipboard daemon; a single Slack tab pulls about three.
 
 Burst cost on each `⌘C`: ~30 ms tick at 1–3 % CPU (secret-classifier regexes + FTS5 index + AES-GCM + optional vault file write), then back to idle. Activity Monitor's _Energy Impact_ column reports ~0 — below its detection threshold.
 

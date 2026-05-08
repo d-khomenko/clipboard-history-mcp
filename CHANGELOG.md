@@ -7,8 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **Daemon refused to start as a launchd/systemd service after `migrate-v2`.** `run_daemon` always called `get_or_create_master_key`, which prompts for the master password on v2-wrapped installs — but launchd/systemd have no controlling TTY, so the prompt failed and the service died at boot. The watcher only needs the key to encrypt secrets, and `CLIPBOARD_NEVER_STORE_SECRETS=1` already drops every secret-classified clip before encrypt is invoked. The daemon now reads that env var first and skips the master-key load entirely in paranoid mode, letting v2-migrated users run the daemon non-interactively.
+
+### Changed
+- **README Performance chart polish** — dropped the "Xcode build" outlier (active workload, not background) and tightened the y-axis to `0..4`. Renamed "static Chrome tab" → "Chrome tab" and recoloured the bars in saturated red (`#dc2626`) for clearer power-burn framing.
+
 ### Added
-- **README: Performance section** — measured idle footprint on Apple Silicon (0.05 % CPU, ~24 MB RSS, ~1 mW avg power, ~1 % battery per 3 weeks of continuous run) with a log-scale Mermaid bar chart comparing against typical background apps (Chrome tabs, Slack, Spotify, Xcode build).
+- **README: Performance section** — measured idle footprint on Apple Silicon (0.05 % CPU, ~24 MB RSS, ~1 mW avg power, ~1 % battery per 3 weeks of continuous run) with a log-scale Mermaid bar chart comparing against typical background apps (Chrome tab, Slack, Spotify, YouTube).
 
 ## [0.5.0-alpha.0] — 2026-05-06
 
