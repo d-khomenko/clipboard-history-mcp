@@ -269,11 +269,11 @@ Daemon idle footprint, measured on Apple Silicon with default `CLIPBOARD_POLL_MS
 | **Power draw (avg)** | **~1 mW** | 0.05 % of an E-core (~1 W full tilt) running continuously |
 | **Battery impact** | **~1 % per 3 weeks** | 1 mW × 504 h = 0.5 Wh on a 52 Wh MacBook Air battery, assuming 24/7 continuous run |
 
-For visual context — square area is proportional to average power draw:
+For visual context — square area is proportional to power draw:
 
-![daemon (~1 mW) vs an idle Chrome tab (~100 mW), drawn as two squares with area proportional to power](docs/assets/power-squares.svg)
+![Three squares: a small solid green square (daemon idle, ~1 mW) sits inside a larger dashed green outline (daemon during a capture burst, ~30 mW). To the right, a 100x100 red square represents an idle Chrome tab (~100 mW).](docs/assets/power-squares.svg)
 
-A Slack desktop tab idling in the background is roughly **30× larger again** than the Chrome square; a YouTube tab playing video is **75× larger**. The daemon stays the same speck on every comparison.
+Solid green = daemon at idle (~1 mW). Dashed green = peak during a single `⌘C` capture (~30 mW for ~30 ms — the secret-classifier + FTS5 update + AES-GCM tick). Even mid-burst the daemon is smaller than a single idle Chrome tab. A Slack desktop tab is **~30× larger again** than the Chrome square; a YouTube tab playing video is **~75× larger**.
 
 Burst cost on each `⌘C`: ~30 ms tick at 1–3 % CPU (secret-classifier regexes + FTS5 index + AES-GCM + optional vault file write), then back to idle. Activity Monitor's _Energy Impact_ column reports ~0 — below its detection threshold.
 
