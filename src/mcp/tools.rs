@@ -10,12 +10,12 @@ use rmcp::{
 };
 use schemars::JsonSchema;
 use serde::Deserialize;
-use std::sync::Arc;
+use std::rc::Rc;
 
 #[derive(Clone)]
 pub struct ClipboardServer {
-    pub store: Arc<Store>,
-    pub biometry: Arc<BiometryGate>,
+    pub store: Rc<Store>,
+    pub biometry: Rc<BiometryGate>,
     pub db_path: std::path::PathBuf,
 }
 
@@ -264,21 +264,18 @@ impl ClipboardServer {
     async fn copy_item(&self, Parameters(p): Parameters<IdParams>) -> String {
         match self.store.get_item(p.id) {
             Ok(Some(item)) => {
-                if item.text.is_none() {
+                let Some(text) = item.text.as_deref() else {
                     return serde_json::json!({
                         "error": "cannot restore secret directly",
                         "requiresUnlock": true
                     })
                     .to_string();
-                }
-                if let Err(e) =
-                    pasteboard::write_clipboard(item.text.as_deref().unwrap())
-                {
+                };
+                if let Err(e) = pasteboard::write_clipboard(text) {
                     return format!("error: {}", e);
                 }
                 let _ = self.store.bump_paste(p.id);
-                serde_json::json!({ "ok": true, "id": p.id, "length": item.length })
-                    .to_string()
+                serde_json::json!({ "ok": true, "id": p.id, "length": item.length }).to_string()
             }
             Ok(None) => format!("error: not found id={}", p.id),
             Err(e) => format!("error: {}", e),
@@ -321,7 +318,7 @@ impl ClipboardServer {
         } else if let Some(rest) = p.scope.strip_prefix("older_than_days:") {
             rest.parse::<i64>()
                 .map_err(anyhow::Error::from)
-                .and_then(|d| Ok(self.store.clear_older_than_days(d)?))
+                .and_then(|d| self.store.clear_older_than_days(d))
         } else if let Some(rest) = p.scope.strip_prefix("kind:") {
             self.store.clear_kind(rest)
         } else {
@@ -356,7 +353,11 @@ impl ClipboardServer {
 
     #[tool(description = "Daemon status (running, pid).")]
     async fn daemon_status(&self, _: Parameters<LimitParams>) -> String {
-        let pid_file = self.db_path.parent().unwrap().join("daemon.pid");
+        let pid_file = self
+            .db_path
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new("."))
+            .join("daemon.pid");
         if !pid_file.exists() {
             return r#"{"running":false}"#.into();
         }

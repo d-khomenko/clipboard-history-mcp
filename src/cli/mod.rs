@@ -9,7 +9,7 @@ pub mod uninstall;
 pub mod vault;
 
 #[derive(Parser)]
-#[command(name = "clipboard-history-mcp", version, about = "macOS clipboard history MCP")]
+#[command(name = "clipboard-history-mcp", version, about = "Cross-platform clipboard history MCP")]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Cmd,

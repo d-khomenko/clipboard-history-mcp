@@ -26,11 +26,11 @@ pub fn install(opts: InstallOpts) -> Result<()> {
     #[cfg(target_os = "macos")]
     {
         let _ = opts.linger; // unused on macOS
-        return install_macos::install_macos(opts);
+        install_macos::install_macos(opts)
     }
     #[cfg(target_os = "linux")]
     {
-        return install_linux::install_linux(opts);
+        install_linux::install_linux(opts)
     }
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     {

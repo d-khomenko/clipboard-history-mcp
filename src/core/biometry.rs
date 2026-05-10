@@ -61,6 +61,11 @@ impl BiometryGate {
 
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     fn evaluate_inner(&self, _reason: &str) -> Result<bool> {
+        tracing::warn!(
+            "biometry gate is not implemented on this platform; \
+             secret unlock is permitted without authentication. \
+             Track at https://github.com/d-khomenko/clipboard-history-mcp/issues"
+        );
         Ok(true)
     }
 }
@@ -129,7 +134,7 @@ mod macos {
                     let _ = sender.send(success.as_bool());
                 },
             ));
-            ctx.evaluatePolicy_localizedReason_reply(policy, &reason_ns, &*block.0);
+            ctx.evaluatePolicy_localizedReason_reply(policy, &reason_ns, &block.0);
             receiver.recv_timeout(Duration::from_secs(60)).unwrap_or(false)
         });
         Ok(ok)

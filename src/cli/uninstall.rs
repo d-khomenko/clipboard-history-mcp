@@ -4,11 +4,11 @@ use anyhow::Result;
 pub fn uninstall(opts: UninstallOpts) -> Result<()> {
     #[cfg(target_os = "macos")]
     {
-        return uninstall_macos(opts);
+        uninstall_macos(opts)
     }
     #[cfg(target_os = "linux")]
     {
-        return crate::cli::install::install_linux::uninstall_linux(opts);
+        crate::cli::install::install_linux::uninstall_linux(opts)
     }
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     {

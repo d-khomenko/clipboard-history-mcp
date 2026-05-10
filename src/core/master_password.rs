@@ -29,7 +29,7 @@ pub fn wrap_master_key(master: &[u8; 32], password: &str) -> Result<WrappedKey> 
     let mut salt = vec![0u8; SALT_LEN];
     rand::thread_rng().fill_bytes(&mut salt);
     let kek = derive_kek(password, &salt)?;
-    let (ct, nonce) = crate::core::crypto::encrypt_bytes(master, &kek);
+    let (ct, nonce) = crate::core::crypto::encrypt_bytes(master, &kek)?;
     Ok(WrappedKey { salt, nonce, ciphertext: ct })
 }
 

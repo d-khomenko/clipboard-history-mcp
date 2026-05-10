@@ -189,7 +189,15 @@ fn append_daily(path: &Path, line: &str) -> Result<()> {
         Some(s) if s.contains(&header) => {
             // Find the section, then find the next H2 (or end of file).
             // Insert `line` immediately before the next H2 (or at EOF).
-            let section_start = s.find(&header).unwrap();
+            let Some(section_start) = s.find(&header) else {
+                // Unreachable given the if-guard above, but defensive against
+                // future edits that drop the guard. Fall through to creating
+                // the section from scratch.
+                return atomic_write(
+                    path,
+                    &format!("{}\n\n{}\n{}", s.trim_end(), header, line),
+                );
+            };
             let after_header = section_start + header.len();
             let next_h2 = s[after_header..]
                 .find("\n## ")

@@ -23,13 +23,15 @@ fn ensure_keyring_store() {
     });
 }
 
-pub fn encrypt(plaintext: &str, key: &[u8; 32]) -> (Vec<u8>, [u8; 12]) {
+pub fn encrypt(plaintext: &str, key: &[u8; 32]) -> Result<(Vec<u8>, [u8; 12])> {
     let cipher = Aes256Gcm::new(key.into());
     let mut nonce = [0u8; 12];
     rand::thread_rng().fill_bytes(&mut nonce);
     let n = Nonce::from_slice(&nonce);
-    let ct = cipher.encrypt(n, plaintext.as_bytes()).expect("encrypt");
-    (ct, nonce)
+    let ct = cipher
+        .encrypt(n, plaintext.as_bytes())
+        .map_err(|_| anyhow!("AEAD encrypt failed"))?;
+    Ok((ct, nonce))
 }
 
 pub fn decrypt(ciphertext: &[u8], nonce: &[u8], key: &[u8; 32]) -> Result<String> {
@@ -93,13 +95,15 @@ fn generate_master_key() -> [u8; 32] {
     k
 }
 
-pub fn encrypt_bytes(plaintext: &[u8], key: &[u8; 32]) -> (Vec<u8>, [u8; 12]) {
+pub fn encrypt_bytes(plaintext: &[u8], key: &[u8; 32]) -> Result<(Vec<u8>, [u8; 12])> {
     let cipher = Aes256Gcm::new(key.into());
     let mut nonce = [0u8; 12];
     rand::thread_rng().fill_bytes(&mut nonce);
     let n = Nonce::from_slice(&nonce);
-    let ct = cipher.encrypt(n, plaintext).expect("encrypt");
-    (ct, nonce)
+    let ct = cipher
+        .encrypt(n, plaintext)
+        .map_err(|_| anyhow!("AEAD encrypt failed"))?;
+    Ok((ct, nonce))
 }
 
 pub fn decrypt_bytes(ciphertext: &[u8], nonce: &[u8], key: &[u8; 32]) -> Result<Vec<u8>> {
@@ -157,5 +161,17 @@ pub fn delete_master_key_v1() -> Result<()> {
     match entry.delete_credential() {
         Ok(_) | Err(KeyringError::NoEntry) => Ok(()),
         Err(e) => Err(anyhow!("keyring delete v1: {}", e)),
+    }
+}
+
+#[cfg(test)]
+mod encrypt_bytes_tests {
+    use super::*;
+
+    #[test]
+    fn encrypt_bytes_returns_result() {
+        let key = [0u8; 32];
+        let r: Result<(Vec<u8>, [u8; 12])> = encrypt_bytes(b"hello", &key);
+        assert!(r.is_ok());
     }
 }

@@ -3,7 +3,7 @@ pub mod tools;
 use crate::core::{biometry::BiometryGate, crypto::get_or_create_master_key, paths, store::Store};
 use anyhow::Result;
 use rmcp::{transport::stdio, ServiceExt};
-use std::sync::Arc;
+use std::rc::Rc;
 
 pub async fn run_server() -> Result<()> {
     let key = get_or_create_master_key(|| {
@@ -11,8 +11,8 @@ pub async fn run_server() -> Result<()> {
     })?;
     let dbp = paths::db_path();
     std::fs::create_dir_all(dbp.parent().unwrap_or(&dbp))?;
-    let store = Arc::new(Store::open(&dbp, key)?);
-    let biometry = Arc::new(BiometryGate::new());
+    let store = Rc::new(Store::open(&dbp, key)?);
+    let biometry = Rc::new(BiometryGate::new());
     let server = tools::ClipboardServer { store, biometry, db_path: dbp };
 
     // rusqlite::Connection is !Sync, so ClipboardServer is !Send.

@@ -17,10 +17,6 @@ pub fn data_dir() -> PathBuf {
     project_dirs().data_dir().to_path_buf()
 }
 
-pub fn config_dir() -> PathBuf {
-    project_dirs().config_dir().to_path_buf()
-}
-
 pub fn db_path() -> PathBuf {
     if let Ok(p) = std::env::var("CLIPBOARD_DB_PATH") {
         return PathBuf::from(p);
