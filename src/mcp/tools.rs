@@ -264,21 +264,18 @@ impl ClipboardServer {
     async fn copy_item(&self, Parameters(p): Parameters<IdParams>) -> String {
         match self.store.get_item(p.id) {
             Ok(Some(item)) => {
-                if item.text.is_none() {
+                let Some(text) = item.text.as_deref() else {
                     return serde_json::json!({
                         "error": "cannot restore secret directly",
                         "requiresUnlock": true
                     })
                     .to_string();
-                }
-                if let Err(e) =
-                    pasteboard::write_clipboard(item.text.as_deref().unwrap())
-                {
+                };
+                if let Err(e) = pasteboard::write_clipboard(text) {
                     return format!("error: {}", e);
                 }
                 let _ = self.store.bump_paste(p.id);
-                serde_json::json!({ "ok": true, "id": p.id, "length": item.length })
-                    .to_string()
+                serde_json::json!({ "ok": true, "id": p.id, "length": item.length }).to_string()
             }
             Ok(None) => format!("error: not found id={}", p.id),
             Err(e) => format!("error: {}", e),
