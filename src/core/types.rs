@@ -17,8 +17,7 @@ pub fn classify(text: &str) -> Classification {
 
     let mut kinds: Vec<String> = Vec::new();
 
-    if is_full_url(text) { kinds.push("url".into()); }
-    else if has_url(text) { kinds.push("url".into()); }
+    if is_full_url(text) || has_url(text) { kinds.push("url".into()); }
     if is_email(text) { kinds.push("email".into()); }
     if is_json(text) { kinds.push("json".into()); }
     if is_sql(text) { kinds.push("sql".into()); }

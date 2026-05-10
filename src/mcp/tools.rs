@@ -10,12 +10,12 @@ use rmcp::{
 };
 use schemars::JsonSchema;
 use serde::Deserialize;
-use std::sync::Arc;
+use std::rc::Rc;
 
 #[derive(Clone)]
 pub struct ClipboardServer {
-    pub store: Arc<Store>,
-    pub biometry: Arc<BiometryGate>,
+    pub store: Rc<Store>,
+    pub biometry: Rc<BiometryGate>,
     pub db_path: std::path::PathBuf,
 }
 
@@ -318,7 +318,7 @@ impl ClipboardServer {
         } else if let Some(rest) = p.scope.strip_prefix("older_than_days:") {
             rest.parse::<i64>()
                 .map_err(anyhow::Error::from)
-                .and_then(|d| Ok(self.store.clear_older_than_days(d)?))
+                .and_then(|d| self.store.clear_older_than_days(d))
         } else if let Some(rest) = p.scope.strip_prefix("kind:") {
             self.store.clear_kind(rest)
         } else {

@@ -134,7 +134,7 @@ mod macos {
                     let _ = sender.send(success.as_bool());
                 },
             ));
-            ctx.evaluatePolicy_localizedReason_reply(policy, &reason_ns, &*block.0);
+            ctx.evaluatePolicy_localizedReason_reply(policy, &reason_ns, &block.0);
             receiver.recv_timeout(Duration::from_secs(60)).unwrap_or(false)
         });
         Ok(ok)

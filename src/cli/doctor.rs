@@ -1,7 +1,9 @@
 use anyhow::Result;
 
+type Check = (&'static str, Box<dyn Fn() -> Result<String>>);
+
 pub fn doctor() -> Result<()> {
-    let mut checks: Vec<(&str, Box<dyn Fn() -> Result<String>>)> = vec![];
+    let mut checks: Vec<Check> = vec![];
 
     checks.push((
         "data dir writable",
