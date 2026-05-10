@@ -1,6 +1,78 @@
 use std::io::Write;
 use std::process::{Command, Stdio};
+use std::sync::Mutex;
 use std::time::Duration;
+
+/// Tests that mutate `CLIPBOARD_DATA_DIR` need to serialise — Cargo runs
+/// integration tests in parallel and the env is process-global.
+static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+/// Pin the on-the-wire JSON shape of `Item` so a future refactor that
+/// drops the T2 payload fields breaks loudly. No production code change —
+/// `serde::Serialize` automatically picks up the four new fields.
+#[test]
+fn item_serialisation_includes_payload_fields() {
+    use clipboard_history_mcp::core::store::Item;
+    let item = Item {
+        id: 1,
+        uuid: "u".into(),
+        text: None,
+        preview: "p".into(),
+        length: 0,
+        primary_kind: "image".into(),
+        kinds: vec![],
+        tags: vec![],
+        source_app: None,
+        window_title: None,
+        first_copied_at: 0,
+        last_copied_at: 0,
+        copy_count: 1,
+        paste_count: 0,
+        is_pinned: false,
+        payload_kind: "image".into(),
+        blob_path: Some("ab/abc.png".into()),
+        blob_size_bytes: Some(123),
+        mime_type: Some("image/png".into()),
+    };
+    let v = serde_json::to_value(&item).unwrap();
+    assert_eq!(v["payload_kind"], "image");
+    assert_eq!(v["blob_path"], "ab/abc.png");
+    assert_eq!(v["blob_size_bytes"], 123);
+    assert_eq!(v["mime_type"], "image/png");
+}
+
+#[test]
+fn get_item_with_blob_inlines_base64_data_url() {
+    use clipboard_history_mcp::core::blobs;
+    use clipboard_history_mcp::core::store::{ImageClipInput, Store};
+
+    let _g = ENV_LOCK.lock().unwrap();
+    let tmp = tempfile::TempDir::new().unwrap();
+    std::env::set_var("CLIPBOARD_DATA_DIR", tmp.path());
+    let db_path = tmp.path().join("t.db");
+    let store = Store::open(&db_path, [0u8; 32]).unwrap();
+    let bytes = vec![0xde, 0xad, 0xbe, 0xef];
+    let id = store.add_image_clip(ImageClipInput {
+        bytes: bytes.clone(),
+        mime: "image/png".into(),
+        source_app: None,
+        window_title: None,
+    }).unwrap();
+
+    // Sanity: the blob actually exists at the expected path.
+    let item = store.get_item(id).unwrap().unwrap();
+    let blob_rel = item.blob_path.as_deref().unwrap();
+    assert!(blobs::absolute_path(blob_rel).exists());
+
+    // Read it via blobs::read and base64-encode to compare.
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    let read_back = blobs::read(blob_rel).unwrap();
+    assert_eq!(read_back, bytes);
+    let expected_b64 = STANDARD.encode(&read_back);
+    assert!(!expected_b64.is_empty());
+
+    std::env::remove_var("CLIPBOARD_DATA_DIR");
+}
 
 /// End-to-end MCP smoke test.
 ///

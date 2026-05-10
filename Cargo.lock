@@ -770,6 +770,7 @@ dependencies = [
  "anyhow",
  "arboard",
  "argon2",
+ "base64",
  "block2",
  "chrono",
  "clap",

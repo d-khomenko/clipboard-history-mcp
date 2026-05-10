@@ -22,6 +22,37 @@ pub struct SecretInput {
     pub window_title: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PayloadKind {
+    Text,
+    Image,
+    File,
+}
+
+impl PayloadKind {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            PayloadKind::Text => "text",
+            PayloadKind::Image => "image",
+            PayloadKind::File => "file",
+        }
+    }
+}
+
+pub struct ImageClipInput {
+    pub bytes: Vec<u8>,
+    pub mime: String,
+    pub source_app: Option<String>,
+    pub window_title: Option<String>,
+}
+
+pub struct FilesClipInput {
+    pub paths: Vec<std::path::PathBuf>,
+    pub source_app: Option<String>,
+    pub window_title: Option<String>,
+}
+
 #[derive(Debug, serde::Serialize)]
 pub struct Item {
     pub id: i64,
@@ -39,6 +70,11 @@ pub struct Item {
     pub copy_count: i64,
     pub paste_count: i64,
     pub is_pinned: bool,
+    // T2 payload metadata. Default to text-only shape for legacy text clips.
+    pub payload_kind: String, // "text" | "image" | "file"
+    pub blob_path: Option<String>,
+    pub blob_size_bytes: Option<i64>,
+    pub mime_type: Option<String>,
 }
 
 pub struct Store {
@@ -111,10 +147,96 @@ impl Store {
         Ok(id)
     }
 
+    pub fn add_image_clip(&self, input: ImageClipInput) -> Result<i64> {
+        use crate::core::blobs;
+        // Hash first, check dedup BEFORE touching disk: a duplicate paste
+        // skips `blobs::write` entirely (it was already a no-op early-return
+        // when the file existed, but the I/O attempt is now avoided too).
+        let hash = blobs::sha256_hex(&input.bytes);
+        let now = now_ms();
+        if let Some(id) = self.find_by_hash(&hash)? {
+            self.conn.execute(
+                "UPDATE clips SET copy_count = copy_count + 1, last_copied_at = ?1 WHERE id = ?2",
+                params![now, id],
+            )?;
+            return Ok(id);
+        }
+        let extension = blobs::extension_for_mime(&input.mime);
+        let (rel_path, _hash) = blobs::write(&input.bytes, extension)?;
+        let preview = format!("[image/{}]", input.mime.split('/').nth(1).unwrap_or("?"));
+        let length = 0i64;
+        let byte_length = input.bytes.len() as i64;
+        let uuid = Uuid::new_v4().to_string();
+        let primary_kind = "image".to_string();
+        let tx = self.conn.unchecked_transaction()?;
+        tx.execute(
+            "INSERT INTO clips (uuid, text, preview, length, byte_length, hash, primary_kind,
+                                source_app, window_title, first_copied_at, last_copied_at,
+                                payload_kind, blob_path, blob_size_bytes, mime_type)
+             VALUES (?1, NULL, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9, 'image', ?10, ?11, ?12)",
+            params![uuid, preview, length, byte_length, hash, primary_kind,
+                    input.source_app, input.window_title, now,
+                    rel_path, byte_length, input.mime],
+        )?;
+        let id = tx.last_insert_rowid();
+        tx.execute("INSERT OR IGNORE INTO kinds(clip_id, kind) VALUES (?1, 'image')", params![id])?;
+        tx.commit()?;
+        Ok(id)
+    }
+
+    pub fn add_files_clip(&self, input: FilesClipInput) -> Result<Vec<i64>> {
+        use crate::core::blobs;
+        let mut ids = Vec::with_capacity(input.paths.len());
+        for path in &input.paths {
+            let bytes = match std::fs::read(path) {
+                Ok(b) => b,
+                Err(e) => {
+                    tracing::warn!("skip file clip {}: {}", path.display(), e);
+                    continue;
+                }
+            };
+            // Hash first, check dedup BEFORE writing the blob to disk —
+            // mirrors the optimisation in add_image_clip.
+            let hash = blobs::sha256_hex(&bytes);
+            let now = now_ms();
+            if let Some(id) = self.find_by_hash(&hash)? {
+                self.conn.execute(
+                    "UPDATE clips SET copy_count = copy_count + 1, last_copied_at = ?1 WHERE id = ?2",
+                    params![now, id],
+                )?;
+                ids.push(id);
+                continue;
+            }
+            let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("bin");
+            let (rel_path, _hash) = blobs::write(&bytes, extension)?;
+            let filename = path.file_name().and_then(|s| s.to_str()).unwrap_or("unknown").to_string();
+            let preview = format!("[file:{}]", filename);
+            let byte_length = bytes.len() as i64;
+            let uuid = Uuid::new_v4().to_string();
+            let mime = "application/octet-stream".to_string();
+            let tx = self.conn.unchecked_transaction()?;
+            tx.execute(
+                "INSERT INTO clips (uuid, text, preview, length, byte_length, hash, primary_kind,
+                                    source_app, window_title, first_copied_at, last_copied_at,
+                                    payload_kind, blob_path, blob_size_bytes, mime_type)
+                 VALUES (?1, NULL, ?2, 0, ?3, ?4, 'file', ?5, ?6, ?7, ?7, 'file', ?8, ?3, ?9)",
+                params![uuid, preview, byte_length, hash,
+                        input.source_app, input.window_title, now,
+                        rel_path, mime],
+            )?;
+            let id = tx.last_insert_rowid();
+            tx.execute("INSERT OR IGNORE INTO kinds(clip_id, kind) VALUES (?1, 'file')", params![id])?;
+            tx.commit()?;
+            ids.push(id);
+        }
+        Ok(ids)
+    }
+
     pub fn get_item(&self, id: i64) -> Result<Option<Item>> {
         let row = self.conn.query_row(
             "SELECT id, uuid, text, preview, length, primary_kind, source_app, window_title,
-                    first_copied_at, last_copied_at, copy_count, paste_count, is_pinned
+                    first_copied_at, last_copied_at, copy_count, paste_count, is_pinned,
+                    payload_kind, blob_path, blob_size_bytes, mime_type
              FROM clips WHERE id = ?1",
             params![id],
             |r| Ok(Item {
@@ -124,6 +246,10 @@ impl Store {
                 first_copied_at: r.get(8)?, last_copied_at: r.get(9)?,
                 copy_count: r.get(10)?, paste_count: r.get(11)?,
                 is_pinned: r.get::<_, i64>(12)? == 1,
+                payload_kind: r.get(13)?,
+                blob_path: r.get(14)?,
+                blob_size_bytes: r.get(15)?,
+                mime_type: r.get(16)?,
             }),
         ).optional()?;
         let Some(mut item) = row else { return Ok(None) };
@@ -150,12 +276,14 @@ impl Store {
     pub fn list_with(&self, kind: Option<&str>, limit: i64, offset: i64) -> Result<Vec<Item>> {
         let sql = if kind.is_some() {
             "SELECT id, uuid, text, preview, length, primary_kind, source_app, window_title,
-                    first_copied_at, last_copied_at, copy_count, paste_count, is_pinned
+                    first_copied_at, last_copied_at, copy_count, paste_count, is_pinned,
+                    payload_kind, blob_path, blob_size_bytes, mime_type
              FROM clips WHERE id IN (SELECT clip_id FROM kinds WHERE kind = ?1)
              ORDER BY is_pinned DESC, last_copied_at DESC LIMIT ?2 OFFSET ?3"
         } else {
             "SELECT id, uuid, text, preview, length, primary_kind, source_app, window_title,
-                    first_copied_at, last_copied_at, copy_count, paste_count, is_pinned
+                    first_copied_at, last_copied_at, copy_count, paste_count, is_pinned,
+                    payload_kind, blob_path, blob_size_bytes, mime_type
              FROM clips ORDER BY is_pinned DESC, last_copied_at DESC LIMIT ?1 OFFSET ?2"
         };
         let mut stmt = self.conn.prepare(sql)?;
@@ -184,7 +312,9 @@ impl Store {
         let mut stmt = self.conn.prepare(
             "SELECT clips.id, clips.uuid, clips.text, clips.preview, clips.length, clips.primary_kind,
                     clips.source_app, clips.window_title, clips.first_copied_at, clips.last_copied_at,
-                    clips.copy_count, clips.paste_count, clips.is_pinned, bm25(clips_fts) AS rank
+                    clips.copy_count, clips.paste_count, clips.is_pinned,
+                    clips.payload_kind, clips.blob_path, clips.blob_size_bytes, clips.mime_type,
+                    bm25(clips_fts) AS rank
              FROM clips_fts JOIN clips ON clips.id = clips_fts.rowid
              WHERE clips_fts MATCH ?1 ORDER BY rank LIMIT ?2"
         )?;
@@ -212,7 +342,19 @@ impl Store {
         Ok(())
     }
     pub fn delete(&self, id: i64) -> Result<()> {
+        let blob_path: Option<String> = self
+            .conn
+            .query_row(
+                "SELECT blob_path FROM clips WHERE id = ?1",
+                params![id],
+                |r| r.get(0),
+            )
+            .optional()?
+            .flatten();
         self.conn.execute("DELETE FROM clips WHERE id = ?1", params![id])?;
+        if let Some(rel) = blob_path {
+            let _ = crate::core::blobs::delete(&rel); // best-effort; warn-logged inside
+        }
         Ok(())
     }
     pub fn bump_paste(&self, id: i64) -> Result<()> {
@@ -274,6 +416,10 @@ fn row_to_item(r: &rusqlite::Row) -> rusqlite::Result<Item> {
         first_copied_at: r.get(8)?, last_copied_at: r.get(9)?,
         copy_count: r.get(10)?, paste_count: r.get(11)?,
         is_pinned: r.get::<_, i64>(12)? == 1,
+        payload_kind: r.get(13)?,
+        blob_path: r.get(14)?,
+        blob_size_bytes: r.get(15)?,
+        mime_type: r.get(16)?,
     })
 }
 fn row_to_item_with_rank(r: &rusqlite::Row) -> rusqlite::Result<Item> { row_to_item(r) }

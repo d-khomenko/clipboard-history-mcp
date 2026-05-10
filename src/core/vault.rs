@@ -19,6 +19,14 @@ pub struct MirrorItem<'a> {
     pub window_title: Option<&'a str>,
     pub text: &'a str,
     pub captured: DateTime<Local>,
+    /// "text" | "image" | "file"
+    pub payload_kind: &'a str,
+    /// Relative path under `data_dir/blobs/` for image/file clips; None
+    /// for text. The vault writer reads this blob and copies it next to
+    /// the sidecar.
+    pub blob_relative_path: Option<&'a str>,
+    /// MIME type for image/file clips; None for text.
+    pub mime_type: Option<&'a str>,
 }
 
 /// Configured mirror writer rooted at an Obsidian vault directory.
@@ -39,6 +47,34 @@ impl VaultMirror {
     pub fn write(&self, item: &MirrorItem<'_>) -> Result<()> {
         let slug = slug_for_filename(item);
 
+        let blob_link = if let (Some(rel), Some(_)) = (item.blob_relative_path, item.mime_type) {
+            // Resolve the source blob in the daemon's data_dir, then copy it
+            // to the vault month folder under a name that mirrors the sidecar.
+            let src = crate::core::blobs::absolute_path(rel);
+            let extension = std::path::Path::new(rel)
+                .extension()
+                .and_then(|s| s.to_str())
+                .unwrap_or("bin")
+                .to_string();
+            let blob_filename = format!("{}.{}", slug, extension);
+            // Compute month_folder eagerly so we have a destination for the
+            // blob copy. (The sidecar path computed later uses the same
+            // month_folder.)
+            let month_folder_for_blob = self
+                .root
+                .join("clipboard")
+                .join(item.captured.format("%Y-%m").to_string());
+            std::fs::create_dir_all(&month_folder_for_blob)?;
+            let dst = month_folder_for_blob.join(&blob_filename);
+            // Copy the blob into the vault. We copy (not symlink) so the
+            // vault is portable: a user can sync the vault folder without
+            // dragging the daemon's data_dir along.
+            std::fs::copy(&src, &dst)?;
+            Some(blob_filename)
+        } else {
+            None
+        };
+
         // Sidecar at <root>/clipboard/YYYY-MM/<id>-<kind>-<slug>.md
         let month_folder = self
             .root
@@ -49,7 +85,7 @@ impl VaultMirror {
         let content = format!(
             "{}\n\n{}\n",
             format_frontmatter(item),
-            format_body(item)
+            format_body(item, blob_link.as_deref())
         );
         atomic_write(&sidecar_path, &content)?;
 
@@ -107,6 +143,10 @@ fn format_frontmatter(item: &MirrorItem<'_>) -> String {
     s.push_str("---\n");
     s.push_str(&format!("id: {}\n", item.id));
     s.push_str(&format!("kind: {}\n", item.primary_kind));
+    s.push_str(&format!("payload_kind: {}\n", item.payload_kind));
+    if let Some(mime) = item.mime_type {
+        s.push_str(&format!("mime_type: {}\n", mime));
+    }
     // Reserved per spec 4.1; populated when classifier surfaces overlapping
     // kinds. Always emitted (even empty) so downstream Obsidian dataview
     // queries can rely on the field's presence.
@@ -137,11 +177,25 @@ fn format_frontmatter(item: &MirrorItem<'_>) -> String {
     s
 }
 
-fn format_body(item: &MirrorItem<'_>) -> String {
+fn format_body(item: &MirrorItem<'_>, blob_filename: Option<&str>) -> String {
     if let Some(lang) = item.primary_kind.strip_prefix("code:") {
-        format!("```{}\n{}\n```", lang, item.text)
-    } else {
-        item.text.to_string()
+        return format!("```{}\n{}\n```", lang, item.text);
+    }
+    match item.payload_kind {
+        "image" => {
+            // Relative-path markdown image link (vault-relative).
+            // Obsidian renders it inline.
+            let link = blob_filename.unwrap_or("");
+            format!("![Captured image]({})", link)
+        }
+        "file" => {
+            format!(
+                "- [`{}`]({})",
+                blob_filename.unwrap_or("file"),
+                blob_filename.unwrap_or("")
+            )
+        }
+        _ => item.text.to_string(),
     }
 }
 
@@ -245,6 +299,9 @@ mod tests {
                 .with_ymd_and_hms(2026, 5, 6, 4, 32, 3)
                 .single()
                 .unwrap(),
+            payload_kind: "text",
+            blob_relative_path: None,
+            mime_type: None,
         }
     }
 
@@ -334,6 +391,9 @@ mod tests {
             window_title: None,
             text: "x",
             captured: Local.with_ymd_and_hms(2026, 5, 6, 4, 32, 3).single().unwrap(),
+            payload_kind: "text",
+            blob_relative_path: None,
+            mime_type: None,
         };
         let fm = format_frontmatter(&item);
         assert!(!fm.contains("source:"));
@@ -349,6 +409,9 @@ mod tests {
             window_title: Some(r#"He said "hi""#),
             text: "x",
             captured: Local.with_ymd_and_hms(2026, 5, 6, 4, 32, 3).single().unwrap(),
+            payload_kind: "text",
+            blob_relative_path: None,
+            mime_type: None,
         };
         let fm = format_frontmatter(&item);
         assert!(fm.contains(r#"window_title: "He said \"hi\"""#));
@@ -366,6 +429,9 @@ mod tests {
             window_title: Some(r#"C:\path "quoted""#),
             text: "x",
             captured: Local.with_ymd_and_hms(2026, 5, 6, 4, 32, 3).single().unwrap(),
+            payload_kind: "text",
+            blob_relative_path: None,
+            mime_type: None,
         };
         let fm = format_frontmatter(&item);
         assert!(
@@ -386,6 +452,9 @@ mod tests {
             window_title: Some("line1\nline2\twith tab\rcr"),
             text: "x",
             captured: Local.with_ymd_and_hms(2026, 5, 6, 4, 32, 3).single().unwrap(),
+            payload_kind: "text",
+            blob_relative_path: None,
+            mime_type: None,
         };
         let fm = format_frontmatter(&item);
         assert!(
@@ -431,31 +500,31 @@ mod tests {
     #[test]
     fn body_plain_text_is_literal() {
         let item = item_with_text("https://example.com/foo", "url");
-        assert_eq!(format_body(&item), "https://example.com/foo");
+        assert_eq!(format_body(&item, None), "https://example.com/foo");
     }
 
     #[test]
     fn body_code_kind_gets_fenced() {
         let item = item_with_text("def f(): pass", "code:python");
-        assert_eq!(format_body(&item), "```python\ndef f(): pass\n```");
+        assert_eq!(format_body(&item, None), "```python\ndef f(): pass\n```");
     }
 
     #[test]
     fn body_code_rust_kind() {
         let item = item_with_text("fn main() {}", "code:rust");
-        assert_eq!(format_body(&item), "```rust\nfn main() {}\n```");
+        assert_eq!(format_body(&item, None), "```rust\nfn main() {}\n```");
     }
 
     #[test]
     fn body_code_unknown_lang_after_colon() {
         let item = item_with_text("foo", "code:zzz");
-        assert_eq!(format_body(&item), "```zzz\nfoo\n```");
+        assert_eq!(format_body(&item, None), "```zzz\nfoo\n```");
     }
 
     #[test]
     fn body_does_not_escape_text() {
         let item = item_with_text("# header *bold* [link](url)", "text");
-        assert_eq!(format_body(&item), "# header *bold* [link](url)");
+        assert_eq!(format_body(&item, None), "# header *bold* [link](url)");
     }
 
     // --- atomic_write ---

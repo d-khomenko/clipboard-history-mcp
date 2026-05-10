@@ -34,6 +34,11 @@ pub struct ListParams {
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct GetItemParams {
     pub id: i64,
+    /// When true and the clip's payload is image or file, include the
+    /// blob bytes as a base64 data URL in the response (`blob_data_url`
+    /// field). Default false to keep responses small.
+    #[serde(default)]
+    pub with_blob: bool,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -100,7 +105,7 @@ impl ClipboardServer {
         }
     }
 
-    #[tool(description = "Fetch one clipboard entry by id. For secrets returns metadata only.")]
+    #[tool(description = "Fetch one clipboard entry by id. For secrets returns metadata only. Pass with_blob=true to inline an image/file blob as a base64 data URL.")]
     async fn get_item(&self, Parameters(p): Parameters<GetItemParams>) -> String {
         match self.store.get_item(p.id) {
             Ok(Some(item)) => {
@@ -108,6 +113,22 @@ impl ClipboardServer {
                 let mut v = serde_json::to_value(&item).unwrap_or(serde_json::Value::Null);
                 if requires_unlock {
                     v["requiresUnlock"] = serde_json::json!(true);
+                }
+                if p.with_blob && !requires_unlock {
+                    if let (Some(rel), Some(mime)) = (item.blob_path.as_deref(), item.mime_type.as_deref()) {
+                        match crate::core::blobs::read(rel) {
+                            Ok(bytes) => {
+                                use base64::{engine::general_purpose::STANDARD, Engine};
+                                let encoded = STANDARD.encode(&bytes);
+                                v["blob_data_url"] = serde_json::Value::String(
+                                    format!("data:{};base64,{}", mime, encoded)
+                                );
+                            }
+                            Err(e) => {
+                                v["blob_error"] = serde_json::Value::String(format!("{}", e));
+                            }
+                        }
+                    }
                 }
                 v.to_string()
             }
@@ -260,22 +281,63 @@ impl ClipboardServer {
         }
     }
 
-    #[tool(description = "Restore a clip to the system clipboard. Refuses secrets — use unlock_secret first.")]
+    #[tool(description = "Restore a clip to the system clipboard. Refuses secrets — use unlock_secret first. Image and file clips are restored via NSPasteboard with the correct UTI on macOS.")]
     async fn copy_item(&self, Parameters(p): Parameters<IdParams>) -> String {
         match self.store.get_item(p.id) {
             Ok(Some(item)) => {
-                let Some(text) = item.text.as_deref() else {
+                if item.primary_kind.starts_with("secret:") {
                     return serde_json::json!({
                         "error": "cannot restore secret directly",
                         "requiresUnlock": true
                     })
                     .to_string();
+                }
+                let result = match item.payload_kind.as_str() {
+                    "text" => {
+                        let Some(text) = item.text.as_deref() else {
+                            return serde_json::json!({"error": "text clip has no text"}).to_string();
+                        };
+                        pasteboard::write_clipboard(text)
+                    }
+                    "image" => {
+                        let Some(rel) = item.blob_path.as_deref() else {
+                            return serde_json::json!({"error": "image clip missing blob_path"}).to_string();
+                        };
+                        let mime = item.mime_type.as_deref().unwrap_or("image/png");
+                        match crate::core::blobs::read(rel) {
+                            Ok(bytes) => pasteboard::write_clip(&pasteboard::Clip::Image {
+                                bytes,
+                                mime: if mime == "image/tiff" { "image/tiff" } else { "image/png" },
+                            }),
+                            Err(e) => return serde_json::json!({"error": format!("blob read: {}", e)}).to_string(),
+                        }
+                    }
+                    "file" => {
+                        // For files we use the original path stored in
+                        // window_title is incorrect — actually the blob_path
+                        // points to a copy in our blobs dir. Restoring a
+                        // 'file' pasteboard from a blobs/ path is correct
+                        // for "paste this file somewhere"; the user can
+                        // drag-and-drop it.
+                        let Some(rel) = item.blob_path.as_deref() else {
+                            return serde_json::json!({"error": "file clip missing blob_path"}).to_string();
+                        };
+                        let abs = crate::core::blobs::absolute_path(rel);
+                        if !abs.exists() {
+                            return serde_json::json!({
+                                "error": "file no longer exists at original path",
+                                "lastKnownPath": abs.display().to_string(),
+                            }).to_string();
+                        }
+                        pasteboard::write_clip(&pasteboard::Clip::Files(vec![abs]))
+                    }
+                    other => return serde_json::json!({"error": format!("unknown payload_kind: {}", other)}).to_string(),
                 };
-                if let Err(e) = pasteboard::write_clipboard(text) {
+                if let Err(e) = result {
                     return format!("error: {}", e);
                 }
                 let _ = self.store.bump_paste(p.id);
-                serde_json::json!({ "ok": true, "id": p.id, "length": item.length }).to_string()
+                serde_json::json!({ "ok": true, "id": p.id, "payload_kind": item.payload_kind }).to_string()
             }
             Ok(None) => format!("error: not found id={}", p.id),
             Err(e) => format!("error: {}", e),
