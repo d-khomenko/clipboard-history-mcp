@@ -91,3 +91,46 @@ fn list_with_pinned_only_returns_only_pinned() {
     let all = store.list_with(None, 100, 0, false).unwrap();
     assert_eq!(all.len(), 2);
 }
+
+#[test]
+fn prune_oldest_never_deletes_pinned_even_when_pinned_exceeds_keep() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let db = tmp.path().join("t.db");
+    let store = Store::open(&db, [0u8; 32]).unwrap();
+
+    // Pin 5 items, leave 5 unpinned. keep=2.
+    let mut pinned_ids = Vec::new();
+    for i in 0..5 {
+        let id = store.add_clip(ClipInput {
+            text: format!("pinned {}", i),
+            primary_kind: "text".into(),
+            kinds: vec!["text".into()],
+            source_app: None, window_title: None,
+        }).unwrap();
+        store.pin(id, true).unwrap();
+        pinned_ids.push(id);
+    }
+    for i in 0..5 {
+        store.add_clip(ClipInput {
+            text: format!("unpinned {}", i),
+            primary_kind: "text".into(),
+            kinds: vec!["text".into()],
+            source_app: None, window_title: None,
+        }).unwrap();
+    }
+
+    // Prune to keep=2. Today this would drop 3 pinned items (degenerate case).
+    // After the fix, `keep` applies only to the unpinned pool (5 unpinned → keep
+    // 2 newest → drop 3); pinned are excluded from the deletion candidates.
+    let removed = store.prune_oldest(2).unwrap();
+    assert_eq!(removed, 3, "expected exactly 3 unpinned items removed, got {}", removed);
+
+    // All 5 pinned should still be there.
+    for id in &pinned_ids {
+        assert!(
+            store.get_item(*id).unwrap().is_some(),
+            "pinned item {} was deleted by prune_oldest",
+            id
+        );
+    }
+}

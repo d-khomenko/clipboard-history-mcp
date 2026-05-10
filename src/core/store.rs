@@ -249,9 +249,12 @@ impl Store {
         )?)
     }
     pub fn prune_oldest(&self, keep: i64) -> Result<usize> {
+        // Pinned clips are NEVER pruned — the ring buffer applies only to
+        // unpinned items. The user's pin list is a contract.
         Ok(self.conn.execute(
-            "DELETE FROM clips WHERE id IN (
-               SELECT id FROM clips ORDER BY is_pinned DESC, last_copied_at DESC LIMIT -1 OFFSET ?1
+            "DELETE FROM clips WHERE is_pinned = 0 AND id IN (
+               SELECT id FROM clips WHERE is_pinned = 0
+                 ORDER BY last_copied_at DESC LIMIT -1 OFFSET ?1
              )",
             params![keep],
         )?)
