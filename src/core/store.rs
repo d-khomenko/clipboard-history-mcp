@@ -149,8 +149,10 @@ impl Store {
 
     pub fn add_image_clip(&self, input: ImageClipInput) -> Result<i64> {
         use crate::core::blobs;
-        let extension = blobs::extension_for_mime(&input.mime);
-        let (rel_path, hash) = blobs::write(&input.bytes, extension)?;
+        // Hash first, check dedup BEFORE touching disk: a duplicate paste
+        // skips `blobs::write` entirely (it was already a no-op early-return
+        // when the file existed, but the I/O attempt is now avoided too).
+        let hash = blobs::sha256_hex(&input.bytes);
         let now = now_ms();
         if let Some(id) = self.find_by_hash(&hash)? {
             self.conn.execute(
@@ -159,6 +161,8 @@ impl Store {
             )?;
             return Ok(id);
         }
+        let extension = blobs::extension_for_mime(&input.mime);
+        let (rel_path, _hash) = blobs::write(&input.bytes, extension)?;
         let preview = format!("[image/{}]", input.mime.split('/').nth(1).unwrap_or("?"));
         let length = 0i64;
         let byte_length = input.bytes.len() as i64;
@@ -191,8 +195,9 @@ impl Store {
                     continue;
                 }
             };
-            let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("bin");
-            let (rel_path, hash) = blobs::write(&bytes, extension)?;
+            // Hash first, check dedup BEFORE writing the blob to disk —
+            // mirrors the optimisation in add_image_clip.
+            let hash = blobs::sha256_hex(&bytes);
             let now = now_ms();
             if let Some(id) = self.find_by_hash(&hash)? {
                 self.conn.execute(
@@ -202,6 +207,8 @@ impl Store {
                 ids.push(id);
                 continue;
             }
+            let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("bin");
+            let (rel_path, _hash) = blobs::write(&bytes, extension)?;
             let filename = path.file_name().and_then(|s| s.to_str()).unwrap_or("unknown").to_string();
             let preview = format!("[file:{}]", filename);
             let byte_length = bytes.len() as i64;

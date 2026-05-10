@@ -79,12 +79,37 @@ fn tick(
 
     let clip = pasteboard::read_clip()?;
 
-    // Dedup on text only — image/file dedup is by hash inside the store.
-    if let pasteboard::Clip::Text(ref s) = clip {
-        if last_seen.as_deref() == Some(s.as_str()) {
+    // Dedup across all payload kinds. Without this, a stable image or file
+    // selection on the pasteboard would re-run capture + vault mirror on
+    // every poll. We pay one sha256 per tick on the image bytes (cheap on
+    // Apple Silicon — ~50 ms per 25 MB) to skip an `add_image_clip` call
+    // and a `std::fs::copy` of the blob into the vault, which is much
+    // costlier. File dedup hashes the joined path list rather than the
+    // bytes — re-reading every file every tick would defeat the purpose,
+    // and "same selection in Finder" is the common case.
+    let dedup_key = match &clip {
+        pasteboard::Clip::Empty => None,
+        pasteboard::Clip::Text(s) => Some(format!("text:{}", s)),
+        pasteboard::Clip::Image { bytes, .. } => {
+            Some(format!("image:{}", crate::core::blobs::sha256_hex(bytes)))
+        }
+        pasteboard::Clip::Files(paths) => {
+            let joined = paths
+                .iter()
+                .map(|p| p.display().to_string())
+                .collect::<Vec<_>>()
+                .join("|");
+            Some(format!(
+                "files:{}",
+                crate::core::blobs::sha256_hex(joined.as_bytes())
+            ))
+        }
+    };
+    if let Some(key) = &dedup_key {
+        if last_seen.as_deref() == Some(key.as_str()) {
             return Ok(());
         }
-        *last_seen = Some(s.clone());
+        *last_seen = Some(key.clone());
     }
 
     let ctx = context::capture(opts.capture_window_title);
