@@ -61,6 +61,11 @@ impl BiometryGate {
 
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     fn evaluate_inner(&self, _reason: &str) -> Result<bool> {
+        tracing::warn!(
+            "biometry gate is not implemented on this platform; \
+             secret unlock is permitted without authentication. \
+             Track at https://github.com/d-khomenko/clipboard-history-mcp/issues"
+        );
         Ok(true)
     }
 }
