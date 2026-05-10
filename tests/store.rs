@@ -134,3 +134,55 @@ fn prune_oldest_never_deletes_pinned_even_when_pinned_exceeds_keep() {
         );
     }
 }
+
+fn make_pinned_and_unpinned(store: &Store) -> (i64, i64) {
+    let pinned_id = store.add_clip(ClipInput {
+        text: "pinned".into(),
+        primary_kind: "text".into(),
+        kinds: vec!["text".into()],
+        source_app: None, window_title: None,
+    }).unwrap();
+    let unpinned_id = store.add_clip(ClipInput {
+        text: "unpinned".into(),
+        primary_kind: "text".into(),
+        kinds: vec!["text".into()],
+        source_app: None, window_title: None,
+    }).unwrap();
+    store.pin(pinned_id, true).unwrap();
+    (pinned_id, unpinned_id)
+}
+
+#[test]
+fn clear_all_preserves_pinned() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let store = Store::open(tmp.path().join("t.db"), [0u8; 32]).unwrap();
+    let (pinned_id, unpinned_id) = make_pinned_and_unpinned(&store);
+
+    let removed = store.clear_all().unwrap();
+    assert_eq!(removed, 1, "only the unpinned item should be removed");
+    assert!(store.get_item(pinned_id).unwrap().is_some(), "pinned should survive");
+    assert!(store.get_item(unpinned_id).unwrap().is_none(), "unpinned should be gone");
+}
+
+#[test]
+fn clear_older_than_days_preserves_pinned() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let store = Store::open(tmp.path().join("t.db"), [0u8; 32]).unwrap();
+    let (pinned_id, _unpinned_id) = make_pinned_and_unpinned(&store);
+
+    // -1 days = future cutoff so EVERY clip is "older than" — only pinning saves the pinned one.
+    let removed = store.clear_older_than_days(-1).unwrap();
+    assert_eq!(removed, 1);
+    assert!(store.get_item(pinned_id).unwrap().is_some());
+}
+
+#[test]
+fn clear_kind_preserves_pinned() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let store = Store::open(tmp.path().join("t.db"), [0u8; 32]).unwrap();
+    let (pinned_id, _unpinned_id) = make_pinned_and_unpinned(&store);
+
+    let removed = store.clear_kind("text").unwrap();
+    assert_eq!(removed, 1, "only the unpinned text item should be removed");
+    assert!(store.get_item(pinned_id).unwrap().is_some());
+}

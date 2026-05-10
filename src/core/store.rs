@@ -236,15 +236,20 @@ impl Store {
         Ok(())
     }
     pub fn clear_all(&self) -> Result<usize> {
-        Ok(self.conn.execute("DELETE FROM clips", [])?)
+        Ok(self.conn.execute("DELETE FROM clips WHERE is_pinned = 0", [])?)
     }
     pub fn clear_older_than_days(&self, days: i64) -> Result<usize> {
         let cutoff = now_ms() - days * 86_400_000;
-        Ok(self.conn.execute("DELETE FROM clips WHERE last_copied_at < ?1", params![cutoff])?)
+        Ok(self.conn.execute(
+            "DELETE FROM clips WHERE is_pinned = 0 AND last_copied_at < ?1",
+            params![cutoff],
+        )?)
     }
     pub fn clear_kind(&self, kind: &str) -> Result<usize> {
         Ok(self.conn.execute(
-            "DELETE FROM clips WHERE primary_kind = ?1 OR id IN (SELECT clip_id FROM kinds WHERE kind = ?1)",
+            "DELETE FROM clips WHERE is_pinned = 0 AND (
+               primary_kind = ?1 OR id IN (SELECT clip_id FROM kinds WHERE kind = ?1)
+             )",
             params![kind],
         )?)
     }
