@@ -176,7 +176,7 @@ Set env vars in the launchd plist (`install` writes them) or via `claude mcp add
 | Variable | Default | What it does |
 |---|---|---|
 | `CLIPBOARD_POLL_MS` | `1500` | Watcher poll interval (ms) |
-| `CLIPBOARD_HISTORY_MAX` | `1000` | Ring-buffer size |
+| `CLIPBOARD_HISTORY_MAX` | `1000` | Ring-buffer size (unpinned clips only — pinned items sit outside the ring buffer) |
 | `CLIPBOARD_CAPTURE_WINDOW_TITLE` | `0` | Capture window titles (needs Accessibility permission) |
 | `CLIPBOARD_IGNORE_APPS` | *(empty)* | Comma-separated app display names to skip |
 | `CLIPBOARD_NEVER_STORE_SECRETS` | `0` | Paranoid mode — metadata only, no ciphertext |

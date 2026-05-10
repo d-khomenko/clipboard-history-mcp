@@ -186,3 +186,39 @@ fn clear_kind_preserves_pinned() {
     assert_eq!(removed, 1, "only the unpinned text item should be removed");
     assert!(store.get_item(pinned_id).unwrap().is_some());
 }
+
+#[test]
+fn clear_kind_preserves_pinned_via_kinds_table_match() {
+    // Locks down the SQL precedence: clear_kind's WHERE is_pinned = 0 AND
+    // (primary_kind = ?1 OR id IN (kinds subquery)) needs the parens —
+    // without them, the kinds-table branch would bypass the pin guard.
+    // This test creates a pinned clip whose primary_kind is "url" but
+    // whose kinds table also lists "text"; calling clear_kind("text")
+    // matches the right branch of the OR. The pin guard must still hold.
+    let tmp = tempfile::TempDir::new().unwrap();
+    let store = Store::open(tmp.path().join("t.db"), [0u8; 32]).unwrap();
+
+    let pinned_id = store.add_clip(ClipInput {
+        text: "https://example.com".into(),
+        primary_kind: "url".into(),
+        kinds: vec!["url".into(), "text".into()],  // both kinds
+        source_app: None, window_title: None,
+    }).unwrap();
+    let _unpinned_id = store.add_clip(ClipInput {
+        text: "plain text".into(),
+        primary_kind: "text".into(),
+        kinds: vec!["text".into()],
+        source_app: None, window_title: None,
+    }).unwrap();
+    store.pin(pinned_id, true).unwrap();
+
+    // clear_kind("text") matches the unpinned clip via primary_kind (left
+    // branch) AND the pinned clip via kinds table (right branch).
+    // With pinned guard via parens, only the unpinned should be removed.
+    let removed = store.clear_kind("text").unwrap();
+    assert_eq!(removed, 1, "only the unpinned text clip should be removed");
+    assert!(
+        store.get_item(pinned_id).unwrap().is_some(),
+        "pinned clip with kinds-table 'text' must survive clear_kind('text')"
+    );
+}
