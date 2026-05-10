@@ -2,6 +2,40 @@ use std::io::Write;
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
+/// Pin the on-the-wire JSON shape of `Item` so a future refactor that
+/// drops the T2 payload fields breaks loudly. No production code change —
+/// `serde::Serialize` automatically picks up the four new fields.
+#[test]
+fn item_serialisation_includes_payload_fields() {
+    use clipboard_history_mcp::core::store::Item;
+    let item = Item {
+        id: 1,
+        uuid: "u".into(),
+        text: None,
+        preview: "p".into(),
+        length: 0,
+        primary_kind: "image".into(),
+        kinds: vec![],
+        tags: vec![],
+        source_app: None,
+        window_title: None,
+        first_copied_at: 0,
+        last_copied_at: 0,
+        copy_count: 1,
+        paste_count: 0,
+        is_pinned: false,
+        payload_kind: "image".into(),
+        blob_path: Some("ab/abc.png".into()),
+        blob_size_bytes: Some(123),
+        mime_type: Some("image/png".into()),
+    };
+    let v = serde_json::to_value(&item).unwrap();
+    assert_eq!(v["payload_kind"], "image");
+    assert_eq!(v["blob_path"], "ab/abc.png");
+    assert_eq!(v["blob_size_bytes"], 123);
+    assert_eq!(v["mime_type"], "image/png");
+}
+
 /// End-to-end MCP smoke test.
 ///
 /// Spawns the binary in `serve` mode, sends the MCP handshake
