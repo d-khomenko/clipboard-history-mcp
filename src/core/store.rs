@@ -144,19 +144,35 @@ impl Store {
     }
 
     pub fn list(&self, limit: i64) -> Result<Vec<Item>> {
-        self.list_with(None, limit, 0)
+        self.list_with(None, limit, 0, false)
     }
 
-    pub fn list_with(&self, kind: Option<&str>, limit: i64, offset: i64) -> Result<Vec<Item>> {
-        let sql = if kind.is_some() {
-            "SELECT id, uuid, text, preview, length, primary_kind, source_app, window_title,
-                    first_copied_at, last_copied_at, copy_count, paste_count, is_pinned
-             FROM clips WHERE id IN (SELECT clip_id FROM kinds WHERE kind = ?1)
-             ORDER BY is_pinned DESC, last_copied_at DESC LIMIT ?2 OFFSET ?3"
-        } else {
-            "SELECT id, uuid, text, preview, length, primary_kind, source_app, window_title,
-                    first_copied_at, last_copied_at, copy_count, paste_count, is_pinned
-             FROM clips ORDER BY is_pinned DESC, last_copied_at DESC LIMIT ?1 OFFSET ?2"
+    pub fn list_with(&self, kind: Option<&str>, limit: i64, offset: i64, pinned_only: bool) -> Result<Vec<Item>> {
+        let sql = match (kind.is_some(), pinned_only) {
+            (true, true) => {
+                "SELECT id, uuid, text, preview, length, primary_kind, source_app, window_title,
+                        first_copied_at, last_copied_at, copy_count, paste_count, is_pinned
+                 FROM clips WHERE is_pinned = 1
+                   AND id IN (SELECT clip_id FROM kinds WHERE kind = ?1)
+                 ORDER BY last_copied_at DESC LIMIT ?2 OFFSET ?3"
+            }
+            (true, false) => {
+                "SELECT id, uuid, text, preview, length, primary_kind, source_app, window_title,
+                        first_copied_at, last_copied_at, copy_count, paste_count, is_pinned
+                 FROM clips WHERE id IN (SELECT clip_id FROM kinds WHERE kind = ?1)
+                 ORDER BY is_pinned DESC, last_copied_at DESC LIMIT ?2 OFFSET ?3"
+            }
+            (false, true) => {
+                "SELECT id, uuid, text, preview, length, primary_kind, source_app, window_title,
+                        first_copied_at, last_copied_at, copy_count, paste_count, is_pinned
+                 FROM clips WHERE is_pinned = 1
+                 ORDER BY last_copied_at DESC LIMIT ?1 OFFSET ?2"
+            }
+            (false, false) => {
+                "SELECT id, uuid, text, preview, length, primary_kind, source_app, window_title,
+                        first_copied_at, last_copied_at, copy_count, paste_count, is_pinned
+                 FROM clips ORDER BY is_pinned DESC, last_copied_at DESC LIMIT ?1 OFFSET ?2"
+            }
         };
         let mut stmt = self.conn.prepare(sql)?;
         let rows = if let Some(k) = kind {

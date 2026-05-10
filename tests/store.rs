@@ -63,3 +63,31 @@ fn fts_finds_secret_by_window_title() {
     assert!(!hits.is_empty());
     assert!(hits[0].text.is_none());
 }
+
+#[test]
+fn list_with_pinned_only_returns_only_pinned() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let db = tmp.path().join("t.db");
+    let store = Store::open(&db, [0u8; 32]).unwrap();
+
+    let pinned_id = store.add_clip(ClipInput {
+        text: "pinned".into(),
+        primary_kind: "text".into(),
+        kinds: vec!["text".into()],
+        source_app: None, window_title: None,
+    }).unwrap();
+    let _unpinned_id = store.add_clip(ClipInput {
+        text: "unpinned".into(),
+        primary_kind: "text".into(),
+        kinds: vec!["text".into()],
+        source_app: None, window_title: None,
+    }).unwrap();
+    store.pin(pinned_id, true).unwrap();
+
+    let pinned = store.list_with(None, 100, 0, true).unwrap();
+    assert_eq!(pinned.len(), 1);
+    assert_eq!(pinned[0].id, pinned_id);
+
+    let all = store.list_with(None, 100, 0, false).unwrap();
+    assert_eq!(all.len(), 2);
+}
