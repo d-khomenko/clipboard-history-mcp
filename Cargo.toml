@@ -62,6 +62,7 @@ rpassword                  = "7"
 objc2                      = "0.6"
 objc2-foundation           = "0.3"
 objc2-local-authentication = "0.3"
+objc2-app-kit              = { version = "0.3", features = ["NSPasteboard"] }
 block2                     = "0.6"
 
 # Linux-only
