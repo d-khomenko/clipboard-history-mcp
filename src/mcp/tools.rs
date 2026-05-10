@@ -353,7 +353,11 @@ impl ClipboardServer {
 
     #[tool(description = "Daemon status (running, pid).")]
     async fn daemon_status(&self, _: Parameters<LimitParams>) -> String {
-        let pid_file = self.db_path.parent().unwrap().join("daemon.pid");
+        let pid_file = self
+            .db_path
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new("."))
+            .join("daemon.pid");
         if !pid_file.exists() {
             return r#"{"running":false}"#.into();
         }
