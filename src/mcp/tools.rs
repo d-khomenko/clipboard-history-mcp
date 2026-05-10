@@ -34,6 +34,11 @@ pub struct ListParams {
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct GetItemParams {
     pub id: i64,
+    /// When true and the clip's payload is image or file, include the
+    /// blob bytes as a base64 data URL in the response (`blob_data_url`
+    /// field). Default false to keep responses small.
+    #[serde(default)]
+    pub with_blob: bool,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -100,7 +105,7 @@ impl ClipboardServer {
         }
     }
 
-    #[tool(description = "Fetch one clipboard entry by id. For secrets returns metadata only.")]
+    #[tool(description = "Fetch one clipboard entry by id. For secrets returns metadata only. Pass with_blob=true to inline an image/file blob as a base64 data URL.")]
     async fn get_item(&self, Parameters(p): Parameters<GetItemParams>) -> String {
         match self.store.get_item(p.id) {
             Ok(Some(item)) => {
@@ -108,6 +113,22 @@ impl ClipboardServer {
                 let mut v = serde_json::to_value(&item).unwrap_or(serde_json::Value::Null);
                 if requires_unlock {
                     v["requiresUnlock"] = serde_json::json!(true);
+                }
+                if p.with_blob && !requires_unlock {
+                    if let (Some(rel), Some(mime)) = (item.blob_path.as_deref(), item.mime_type.as_deref()) {
+                        match crate::core::blobs::read(rel) {
+                            Ok(bytes) => {
+                                use base64::{engine::general_purpose::STANDARD, Engine};
+                                let encoded = STANDARD.encode(&bytes);
+                                v["blob_data_url"] = serde_json::Value::String(
+                                    format!("data:{};base64,{}", mime, encoded)
+                                );
+                            }
+                            Err(e) => {
+                                v["blob_error"] = serde_json::Value::String(format!("{}", e));
+                            }
+                        }
+                    }
                 }
                 v.to_string()
             }
