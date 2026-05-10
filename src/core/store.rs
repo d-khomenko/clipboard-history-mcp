@@ -92,7 +92,7 @@ impl Store {
         let primary_kind = format!("secret:{}", input.secret_kind);
         let length = input.text.chars().count() as i64;
         let byte_length = input.text.len() as i64;
-        let (ciphertext, nonce) = encrypt(&input.text, &self.master_key);
+        let (ciphertext, nonce) = encrypt(&input.text, &self.master_key)?;
         let tx = self.conn.unchecked_transaction()?;
         tx.execute(
             "INSERT INTO clips (uuid, text, preview, length, byte_length, hash, primary_kind,
