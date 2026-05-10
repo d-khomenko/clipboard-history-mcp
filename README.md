@@ -158,6 +158,8 @@ How many secrets are in my clipboard vault, by kind?
 
 Pin the JSON I just copied — I'll need it again.
 
+Show me only my pinned clips.
+
 What apps did I copy from most this week?
 
 Restore that GitHub PR link to my clipboard.
@@ -189,7 +191,7 @@ Set env vars in the launchd plist (`install` writes them) or via `claude mcp add
 
 | | |
 |---|---|
-| `list_history(limit?, kind?, source_app?, since?, pinned_only?)` | Paginated history, newest first |
+| `list_history(limit?, kind?, source_app?, since?, pinned_only?)` | Paginated history, newest first. `pinned_only=true` returns only pinned clips. |
 | `get_item(id)` | Single clip by id |
 | `search_history(query, limit?)` | FTS5 BM25 across preview + window title |
 | `get_urls(limit?)` | URL clips, deduped by hostname |
