@@ -58,7 +58,11 @@ pub fn write(bytes: &[u8], extension: &str) -> Result<(String, String)> {
         std::fs::create_dir_all(parent).context("create blob parent dir")?;
     }
     let pid = std::process::id();
-    let tmp = abs.with_file_name(format!("{}.{}.tmp", abs.file_name().unwrap().to_string_lossy(), pid));
+    let file_name = abs
+        .file_name()
+        .context("blob path missing file name component")?
+        .to_string_lossy();
+    let tmp = abs.with_file_name(format!("{}.{}.tmp", file_name, pid));
     {
         let mut f = std::fs::File::create(&tmp).context("create blob tmp")?;
         f.write_all(bytes).context("write blob bytes")?;

@@ -41,6 +41,9 @@ Claude: Found, restoring. ✓ ready to ⌘V.
 
 You: "What code did I copy from ChatGPT over the last 2 hours?"
 Claude: 3 Python snippets, 1 SQL query, 1 shell command.
+
+You: "Show me the screenshot I just copied"
+Claude: Returns a 142×120 PNG, mime image/png, captured from Preview 2 minutes ago.
 ```
 
 Search uses SQLite **FTS5** + window-title indexing — you find clips by *where* you copied them, not just by content.
@@ -180,6 +183,7 @@ Set env vars in the launchd plist (`install` writes them) or via `claude mcp add
 | `CLIPBOARD_NEVER_STORE_SECRETS` | `0` | Paranoid mode — metadata only, no ciphertext |
 | `CLIPBOARD_DATA_DIR` | `~/Library/Application Support/clipboard-history-mcp` | Override data dir |
 | `CLIPBOARD_VAULT_PATH` | *(empty)* | Auto-mirror non-secret clips to this Obsidian vault directory (sidecar `.md` per clip + bullet in `daily/YYYY-MM-DD.md`). Set via `--vault PATH` at install time. |
+| `CLIPBOARD_MAX_BLOB_BYTES` | `26214400` (25 MB) | Skip image / file pasteboards larger than this. Logs a `WARN` line with the source app + size. |
 
 ---
 
