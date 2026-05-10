@@ -7,6 +7,10 @@ description = "Type-aware, secret-safe clipboard history exposed to Claude via M
 license = "MIT"
 authors = ["Dmytro Khomenko"]
 repository = "https://github.com/d-khomenko/clipboard-history-mcp"
+categories = ["command-line-utilities", "development-tools"]
+documentation = "https://docs.rs/clipboard-history-mcp"
+keywords = ["mcp", "clipboard", "claude", "anthropic", "macos"]
+readme = "README.md"
 
 [lib]
 path = "src/lib.rs"

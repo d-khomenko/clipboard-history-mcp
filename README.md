@@ -88,6 +88,18 @@ claude mcp add -s user clipboard-history -- ./ext/server/clipboard-history-mcp s
 ./ext/server/clipboard-history-mcp install
 ```
 
+### Quick install — `cargo install`
+
+If you have a Rust toolchain (Rust 1.95+) and use Claude Code:
+
+```bash
+cargo install clipboard-history-mcp
+clipboard-history-mcp install                      # start daemon
+claude mcp add -s user clipboard-history -- clipboard-history-mcp serve
+```
+
+This pulls a release crate from crates.io and compiles locally. Slightly slower than the `.mcpb` drag-and-drop above (compile takes ~2 min on Apple Silicon), but it's the cleanest path for Claude Code users — three commands and you're capturing.
+
 ### From source (macOS)
 
 Requirements: Rust 1.95+, macOS 13+.

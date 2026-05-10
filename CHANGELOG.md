@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **`cargo install clipboard-history-mcp`** — Claude Code users can now install the daemon in one command instead of cloning + `cargo build --release`. Pulls from crates.io and compiles locally. Cargo.toml gains `keywords`, `categories`, `readme`, `documentation` metadata required for crates.io publish; release CI gains a `cargo-publish` job that runs on tag push gated on the `CARGO_REGISTRY_TOKEN` secret.
 - **Image and file capture (T2).** Pasteboard PNG / TIFF and macOS file URLs are now captured alongside text. Blobs are content-hash deduplicated and stored under `data_dir/blobs/<aa>/<sha256>.<ext>`. New env var `CLIPBOARD_MAX_BLOB_BYTES` (default 25 MB) caps per-clip size. `list_history` and `get_item` include `payload_kind`, `blob_path`, `blob_size_bytes`, `mime_type`; `get_item` accepts `with_blob: true` for an inline base64 data URL. `copy_item` writes the blob back to the pasteboard with the correct UTI on macOS. Vault-mirror copies the blob alongside the sidecar and renders an image link in the body.
 - New env var: `CLIPBOARD_MAX_BLOB_BYTES`.
 - New top-level dep: `base64 = "0.22"`.
