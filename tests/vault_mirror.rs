@@ -6,6 +6,11 @@
 
 use chrono::TimeZone;
 use clipboard_history_mcp::core::vault::{MirrorItem, VaultMirror};
+use std::sync::Mutex;
+
+/// Tests that mutate `CLIPBOARD_DATA_DIR` need to serialise — Cargo runs
+/// integration tests in parallel and the env is process-global.
+static ENV_LOCK: Mutex<()> = Mutex::new(());
 
 fn captured() -> chrono::DateTime<chrono::Local> {
     chrono::Local
@@ -26,6 +31,9 @@ fn sidecar_url_clip_round_trip() {
         window_title: Some("API Keys — OpenAI Platform"),
         text: "https://platform.openai.com/api-keys",
         captured: captured(),
+        payload_kind: "text",
+        blob_relative_path: None,
+        mime_type: None,
     };
     mirror.write(&item).unwrap();
 
@@ -52,6 +60,9 @@ fn sidecar_code_clip_is_fenced() {
         window_title: None,
         text: "def authenticate(token: str):\n    pass",
         captured: captured(),
+        payload_kind: "text",
+        blob_relative_path: None,
+        mime_type: None,
     };
     mirror.write(&item).unwrap();
 
@@ -81,6 +92,9 @@ fn lazy_dir_creation_under_nonexistent_root() {
         window_title: None,
         text: "x",
         captured: captured(),
+        payload_kind: "text",
+        blob_relative_path: None,
+        mime_type: None,
     };
     mirror.write(&item).unwrap();
     assert!(nonexistent.join("clipboard/2026-05").is_dir());
@@ -98,6 +112,9 @@ fn writes_sidecar_and_daily_for_same_clip() {
         window_title: None,
         text: "https://example.com",
         captured: captured(),
+        payload_kind: "text",
+        blob_relative_path: None,
+        mime_type: None,
     };
     mirror.write(&item).unwrap();
 
@@ -122,6 +139,9 @@ fn second_clip_appends_bullet_to_same_daily() {
         window_title: None,
         text: "https://a.example",
         captured: captured(),
+        payload_kind: "text",
+        blob_relative_path: None,
+        mime_type: None,
     };
     mirror.write(&item).unwrap();
     item.id = 2;
@@ -162,9 +182,55 @@ fn store_then_mirror_writes_files() {
         window_title: None,
         text: "https://example.com",
         captured: captured(),
+        payload_kind: "text",
+        blob_relative_path: None,
+        mime_type: None,
     };
     mirror.write(&item).unwrap();
 
     assert!(tmp_vault.path().join("clipboard/2026-05").is_dir());
     assert!(tmp_vault.path().join("daily/2026-05-06.md").exists());
+}
+
+#[test]
+fn image_clip_writes_blob_alongside_sidecar() {
+    let _g = ENV_LOCK.lock().unwrap();
+    let tmp = tempfile::TempDir::new().unwrap();
+    std::env::set_var("CLIPBOARD_DATA_DIR", tmp.path());
+    let blobs_dir = tmp.path().join("blobs");
+    std::fs::create_dir_all(blobs_dir.join("ab")).unwrap();
+    let blob_rel = "ab/abcdef.png";
+    std::fs::write(blobs_dir.join(blob_rel), b"\x89PNG\r\n\x1a\n").unwrap();
+
+    let vault_root = tmp.path().join("vault");
+    let mirror = VaultMirror::new(vault_root.clone());
+    mirror
+        .write(&MirrorItem {
+            id: 142,
+            primary_kind: "image",
+            source_app: Some("Preview"),
+            window_title: None,
+            text: "[image/png]",
+            captured: chrono::Local
+                .with_ymd_and_hms(2026, 5, 6, 4, 32, 3)
+                .single()
+                .unwrap(),
+            payload_kind: "image",
+            blob_relative_path: Some(blob_rel),
+            mime_type: Some("image/png"),
+        })
+        .unwrap();
+
+    let month_folder = vault_root.join("clipboard").join("2026-05");
+    let sidecar = month_folder.join("142-image-image-png.md");
+    let blob_in_vault = month_folder.join("142-image-image-png.png");
+    assert!(sidecar.exists(), "sidecar should be written");
+    assert!(blob_in_vault.exists(), "blob copy should be written");
+
+    let body = std::fs::read_to_string(&sidecar).unwrap();
+    assert!(body.contains("payload_kind: image"));
+    assert!(body.contains("mime_type: image/png"));
+    assert!(body.contains("![Captured image](142-image-image-png.png)"));
+
+    std::env::remove_var("CLIPBOARD_DATA_DIR");
 }
