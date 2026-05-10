@@ -99,7 +99,8 @@ impl ClipboardServer {
     #[tool(description = "List recent clipboard entries, newest first. Secret values are never returned — only metadata.")]
     async fn list_history(&self, Parameters(p): Parameters<ListParams>) -> String {
         let limit = p.limit.unwrap_or(20);
-        match self.store.list_with(p.kind.as_deref(), limit, p.offset.unwrap_or(0)) {
+        let pinned_only = p.pinned_only.unwrap_or(false);
+        match self.store.list_with(p.kind.as_deref(), limit, p.offset.unwrap_or(0), pinned_only) {
             Ok(items) => serde_json::json!({ "count": items.len(), "items": items }).to_string(),
             Err(e) => format!("error: {}", e),
         }
@@ -149,7 +150,7 @@ impl ClipboardServer {
     #[tool(description = "Return URL clips, deduped by host.")]
     async fn get_urls(&self, Parameters(p): Parameters<LimitParams>) -> String {
         let limit = p.limit.unwrap_or(20);
-        match self.store.list_with(Some("url"), 200, 0) {
+        match self.store.list_with(Some("url"), 200, 0, false) {
             Ok(items) => {
                 let mut by_host: std::collections::HashMap<String, usize> =
                     std::collections::HashMap::new();
@@ -185,7 +186,7 @@ impl ClipboardServer {
         let limit = p.limit.unwrap_or(20);
         let kind = p.language.as_ref().map(|l| format!("code:{}", l.to_lowercase()));
         let res = match kind {
-            Some(k) => self.store.list_with(Some(&k), limit, 0),
+            Some(k) => self.store.list_with(Some(&k), limit, 0, false),
             None => self.store.list(limit).map(|all| {
                 all.into_iter()
                     .filter(|i| i.primary_kind.starts_with("code:"))
@@ -201,7 +202,7 @@ impl ClipboardServer {
     #[tool(description = "Return JSON clips with parsed structure preview.")]
     async fn get_json(&self, Parameters(p): Parameters<LimitParams>) -> String {
         let limit = p.limit.unwrap_or(20);
-        match self.store.list_with(Some("json"), limit, 0) {
+        match self.store.list_with(Some("json"), limit, 0, false) {
             Ok(items) => {
                 let parsed: Vec<_> = items
                     .into_iter()
@@ -226,7 +227,7 @@ impl ClipboardServer {
     async fn get_secrets_index(&self, Parameters(p): Parameters<SecretsIndexParams>) -> String {
         let filter = p.kind.as_ref().map(|k| format!("secret:{}", k));
         let res = match filter.as_deref() {
-            Some(k) => self.store.list_with(Some(k), 200, 0),
+            Some(k) => self.store.list_with(Some(k), 200, 0, false),
             None => self.store.list(500).map(|all| {
                 all.into_iter()
                     .filter(|i| i.primary_kind.starts_with("secret:"))

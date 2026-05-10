@@ -270,21 +270,39 @@ impl Store {
     }
 
     pub fn list(&self, limit: i64) -> Result<Vec<Item>> {
-        self.list_with(None, limit, 0)
+        self.list_with(None, limit, 0, false)
     }
 
-    pub fn list_with(&self, kind: Option<&str>, limit: i64, offset: i64) -> Result<Vec<Item>> {
-        let sql = if kind.is_some() {
-            "SELECT id, uuid, text, preview, length, primary_kind, source_app, window_title,
-                    first_copied_at, last_copied_at, copy_count, paste_count, is_pinned,
-                    payload_kind, blob_path, blob_size_bytes, mime_type
-             FROM clips WHERE id IN (SELECT clip_id FROM kinds WHERE kind = ?1)
-             ORDER BY is_pinned DESC, last_copied_at DESC LIMIT ?2 OFFSET ?3"
-        } else {
-            "SELECT id, uuid, text, preview, length, primary_kind, source_app, window_title,
-                    first_copied_at, last_copied_at, copy_count, paste_count, is_pinned,
-                    payload_kind, blob_path, blob_size_bytes, mime_type
-             FROM clips ORDER BY is_pinned DESC, last_copied_at DESC LIMIT ?1 OFFSET ?2"
+    pub fn list_with(&self, kind: Option<&str>, limit: i64, offset: i64, pinned_only: bool) -> Result<Vec<Item>> {
+        let sql = match (kind.is_some(), pinned_only) {
+            (true, true) => {
+                "SELECT id, uuid, text, preview, length, primary_kind, source_app, window_title,
+                        first_copied_at, last_copied_at, copy_count, paste_count, is_pinned,
+                        payload_kind, blob_path, blob_size_bytes, mime_type
+                 FROM clips WHERE is_pinned = 1
+                   AND id IN (SELECT clip_id FROM kinds WHERE kind = ?1)
+                 ORDER BY last_copied_at DESC LIMIT ?2 OFFSET ?3"
+            }
+            (true, false) => {
+                "SELECT id, uuid, text, preview, length, primary_kind, source_app, window_title,
+                        first_copied_at, last_copied_at, copy_count, paste_count, is_pinned,
+                        payload_kind, blob_path, blob_size_bytes, mime_type
+                 FROM clips WHERE id IN (SELECT clip_id FROM kinds WHERE kind = ?1)
+                 ORDER BY is_pinned DESC, last_copied_at DESC LIMIT ?2 OFFSET ?3"
+            }
+            (false, true) => {
+                "SELECT id, uuid, text, preview, length, primary_kind, source_app, window_title,
+                        first_copied_at, last_copied_at, copy_count, paste_count, is_pinned,
+                        payload_kind, blob_path, blob_size_bytes, mime_type
+                 FROM clips WHERE is_pinned = 1
+                 ORDER BY last_copied_at DESC LIMIT ?1 OFFSET ?2"
+            }
+            (false, false) => {
+                "SELECT id, uuid, text, preview, length, primary_kind, source_app, window_title,
+                        first_copied_at, last_copied_at, copy_count, paste_count, is_pinned,
+                        payload_kind, blob_path, blob_size_bytes, mime_type
+                 FROM clips ORDER BY is_pinned DESC, last_copied_at DESC LIMIT ?1 OFFSET ?2"
+            }
         };
         let mut stmt = self.conn.prepare(sql)?;
         let rows = if let Some(k) = kind {
@@ -362,22 +380,30 @@ impl Store {
         Ok(())
     }
     pub fn clear_all(&self) -> Result<usize> {
-        Ok(self.conn.execute("DELETE FROM clips", [])?)
+        Ok(self.conn.execute("DELETE FROM clips WHERE is_pinned = 0", [])?)
     }
     pub fn clear_older_than_days(&self, days: i64) -> Result<usize> {
         let cutoff = now_ms() - days * 86_400_000;
-        Ok(self.conn.execute("DELETE FROM clips WHERE last_copied_at < ?1", params![cutoff])?)
+        Ok(self.conn.execute(
+            "DELETE FROM clips WHERE is_pinned = 0 AND last_copied_at < ?1",
+            params![cutoff],
+        )?)
     }
     pub fn clear_kind(&self, kind: &str) -> Result<usize> {
         Ok(self.conn.execute(
-            "DELETE FROM clips WHERE primary_kind = ?1 OR id IN (SELECT clip_id FROM kinds WHERE kind = ?1)",
+            "DELETE FROM clips WHERE is_pinned = 0 AND (
+               primary_kind = ?1 OR id IN (SELECT clip_id FROM kinds WHERE kind = ?1)
+             )",
             params![kind],
         )?)
     }
     pub fn prune_oldest(&self, keep: i64) -> Result<usize> {
+        // Pinned clips are NEVER pruned — the ring buffer applies only to
+        // unpinned items. The user's pin list is a contract.
         Ok(self.conn.execute(
-            "DELETE FROM clips WHERE id IN (
-               SELECT id FROM clips ORDER BY is_pinned DESC, last_copied_at DESC LIMIT -1 OFFSET ?1
+            "DELETE FROM clips WHERE is_pinned = 0 AND id IN (
+               SELECT id FROM clips WHERE is_pinned = 0
+                 ORDER BY last_copied_at DESC LIMIT -1 OFFSET ?1
              )",
             params![keep],
         )?)

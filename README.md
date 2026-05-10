@@ -161,6 +161,8 @@ How many secrets are in my clipboard vault, by kind?
 
 Pin the JSON I just copied — I'll need it again.
 
+Show me only my pinned clips.
+
 What apps did I copy from most this week?
 
 Restore that GitHub PR link to my clipboard.
@@ -177,7 +179,7 @@ Set env vars in the launchd plist (`install` writes them) or via `claude mcp add
 | Variable | Default | What it does |
 |---|---|---|
 | `CLIPBOARD_POLL_MS` | `1500` | Watcher poll interval (ms) |
-| `CLIPBOARD_HISTORY_MAX` | `1000` | Ring-buffer size |
+| `CLIPBOARD_HISTORY_MAX` | `1000` | Ring-buffer size (unpinned clips only — pinned items sit outside the ring buffer) |
 | `CLIPBOARD_CAPTURE_WINDOW_TITLE` | `0` | Capture window titles (needs Accessibility permission) |
 | `CLIPBOARD_IGNORE_APPS` | *(empty)* | Comma-separated app display names to skip |
 | `CLIPBOARD_NEVER_STORE_SECRETS` | `0` | Paranoid mode — metadata only, no ciphertext |
@@ -193,7 +195,7 @@ Set env vars in the launchd plist (`install` writes them) or via `claude mcp add
 
 | | |
 |---|---|
-| `list_history(limit?, kind?, source_app?, since?, pinned_only?)` | Paginated history, newest first |
+| `list_history(limit?, kind?, source_app?, since?, pinned_only?)` | Paginated history, newest first. `pinned_only=true` returns only pinned clips. |
 | `get_item(id)` | Single clip by id |
 | `search_history(query, limit?)` | FTS5 BM25 across preview + window title |
 | `get_urls(limit?)` | URL clips, deduped by hostname |

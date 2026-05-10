@@ -141,3 +141,162 @@ fn delete_image_clip_removes_blob_file() {
 
     std::env::remove_var("CLIPBOARD_DATA_DIR");
 }
+
+#[test]
+fn list_with_pinned_only_returns_only_pinned() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let db = tmp.path().join("t.db");
+    let store = Store::open(&db, [0u8; 32]).unwrap();
+
+    let pinned_id = store.add_clip(ClipInput {
+        text: "pinned".into(),
+        primary_kind: "text".into(),
+        kinds: vec!["text".into()],
+        source_app: None, window_title: None,
+    }).unwrap();
+    let _unpinned_id = store.add_clip(ClipInput {
+        text: "unpinned".into(),
+        primary_kind: "text".into(),
+        kinds: vec!["text".into()],
+        source_app: None, window_title: None,
+    }).unwrap();
+    store.pin(pinned_id, true).unwrap();
+
+    let pinned = store.list_with(None, 100, 0, true).unwrap();
+    assert_eq!(pinned.len(), 1);
+    assert_eq!(pinned[0].id, pinned_id);
+
+    let all = store.list_with(None, 100, 0, false).unwrap();
+    assert_eq!(all.len(), 2);
+}
+
+#[test]
+fn prune_oldest_never_deletes_pinned_even_when_pinned_exceeds_keep() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let db = tmp.path().join("t.db");
+    let store = Store::open(&db, [0u8; 32]).unwrap();
+
+    // Pin 5 items, leave 5 unpinned. keep=2.
+    let mut pinned_ids = Vec::new();
+    for i in 0..5 {
+        let id = store.add_clip(ClipInput {
+            text: format!("pinned {}", i),
+            primary_kind: "text".into(),
+            kinds: vec!["text".into()],
+            source_app: None, window_title: None,
+        }).unwrap();
+        store.pin(id, true).unwrap();
+        pinned_ids.push(id);
+    }
+    for i in 0..5 {
+        store.add_clip(ClipInput {
+            text: format!("unpinned {}", i),
+            primary_kind: "text".into(),
+            kinds: vec!["text".into()],
+            source_app: None, window_title: None,
+        }).unwrap();
+    }
+
+    // Prune to keep=2. Today this would drop 3 pinned items (degenerate case).
+    // After the fix, `keep` applies only to the unpinned pool (5 unpinned → keep
+    // 2 newest → drop 3); pinned are excluded from the deletion candidates.
+    let removed = store.prune_oldest(2).unwrap();
+    assert_eq!(removed, 3, "expected exactly 3 unpinned items removed, got {}", removed);
+
+    // All 5 pinned should still be there.
+    for id in &pinned_ids {
+        assert!(
+            store.get_item(*id).unwrap().is_some(),
+            "pinned item {} was deleted by prune_oldest",
+            id
+        );
+    }
+}
+
+fn make_pinned_and_unpinned(store: &Store) -> (i64, i64) {
+    let pinned_id = store.add_clip(ClipInput {
+        text: "pinned".into(),
+        primary_kind: "text".into(),
+        kinds: vec!["text".into()],
+        source_app: None, window_title: None,
+    }).unwrap();
+    let unpinned_id = store.add_clip(ClipInput {
+        text: "unpinned".into(),
+        primary_kind: "text".into(),
+        kinds: vec!["text".into()],
+        source_app: None, window_title: None,
+    }).unwrap();
+    store.pin(pinned_id, true).unwrap();
+    (pinned_id, unpinned_id)
+}
+
+#[test]
+fn clear_all_preserves_pinned() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let store = Store::open(tmp.path().join("t.db"), [0u8; 32]).unwrap();
+    let (pinned_id, unpinned_id) = make_pinned_and_unpinned(&store);
+
+    let removed = store.clear_all().unwrap();
+    assert_eq!(removed, 1, "only the unpinned item should be removed");
+    assert!(store.get_item(pinned_id).unwrap().is_some(), "pinned should survive");
+    assert!(store.get_item(unpinned_id).unwrap().is_none(), "unpinned should be gone");
+}
+
+#[test]
+fn clear_older_than_days_preserves_pinned() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let store = Store::open(tmp.path().join("t.db"), [0u8; 32]).unwrap();
+    let (pinned_id, _unpinned_id) = make_pinned_and_unpinned(&store);
+
+    // -1 days = future cutoff so EVERY clip is "older than" — only pinning saves the pinned one.
+    let removed = store.clear_older_than_days(-1).unwrap();
+    assert_eq!(removed, 1);
+    assert!(store.get_item(pinned_id).unwrap().is_some());
+}
+
+#[test]
+fn clear_kind_preserves_pinned() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let store = Store::open(tmp.path().join("t.db"), [0u8; 32]).unwrap();
+    let (pinned_id, _unpinned_id) = make_pinned_and_unpinned(&store);
+
+    let removed = store.clear_kind("text").unwrap();
+    assert_eq!(removed, 1, "only the unpinned text item should be removed");
+    assert!(store.get_item(pinned_id).unwrap().is_some());
+}
+
+#[test]
+fn clear_kind_preserves_pinned_via_kinds_table_match() {
+    // Locks down the SQL precedence: clear_kind's WHERE is_pinned = 0 AND
+    // (primary_kind = ?1 OR id IN (kinds subquery)) needs the parens —
+    // without them, the kinds-table branch would bypass the pin guard.
+    // This test creates a pinned clip whose primary_kind is "url" but
+    // whose kinds table also lists "text"; calling clear_kind("text")
+    // matches the right branch of the OR. The pin guard must still hold.
+    let tmp = tempfile::TempDir::new().unwrap();
+    let store = Store::open(tmp.path().join("t.db"), [0u8; 32]).unwrap();
+
+    let pinned_id = store.add_clip(ClipInput {
+        text: "https://example.com".into(),
+        primary_kind: "url".into(),
+        kinds: vec!["url".into(), "text".into()],  // both kinds
+        source_app: None, window_title: None,
+    }).unwrap();
+    let _unpinned_id = store.add_clip(ClipInput {
+        text: "plain text".into(),
+        primary_kind: "text".into(),
+        kinds: vec!["text".into()],
+        source_app: None, window_title: None,
+    }).unwrap();
+    store.pin(pinned_id, true).unwrap();
+
+    // clear_kind("text") matches the unpinned clip via primary_kind (left
+    // branch) AND the pinned clip via kinds table (right branch).
+    // With pinned guard via parens, only the unpinned should be removed.
+    let removed = store.clear_kind("text").unwrap();
+    assert_eq!(removed, 1, "only the unpinned text clip should be removed");
+    assert!(
+        store.get_item(pinned_id).unwrap().is_some(),
+        "pinned clip with kinds-table 'text' must survive clear_kind('text')"
+    );
+}
