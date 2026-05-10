@@ -86,8 +86,11 @@ pub fn change_count() -> i64 {
 mod macos_pb {
     use anyhow::Result;
     use objc2::rc::autoreleasepool;
-    use objc2_app_kit::NSPasteboard;
-    use objc2_foundation::NSString;
+    use objc2_app_kit::{
+        NSPasteboard, NSPasteboardTypeFileURL, NSPasteboardTypePNG, NSPasteboardTypeTIFF,
+    };
+    use objc2_foundation::{NSString, NSURL};
+    use std::path::PathBuf;
 
     /// Pasteboard type UTIs that signal "do not record" by community or
     /// Apple convention.
@@ -98,8 +101,71 @@ mod macos_pb {
     ];
 
     pub fn read_clip_macos() -> Result<Option<super::Clip>> {
-        // Stub: image + file branches land in T2 Task 5.
-        Ok(None)
+        autoreleasepool(|_| {
+            let pb = NSPasteboard::generalPasteboard();
+            let Some(types) = pb.types() else {
+                return Ok::<Option<super::Clip>, anyhow::Error>(None);
+            };
+
+            // Priority 1: PNG image.
+            let png_uti = unsafe { NSPasteboardTypePNG };
+            if types.containsObject(png_uti) {
+                if let Some(data) = pb.dataForType(png_uti) {
+                    let bytes = data.to_vec();
+                    return Ok(Some(super::Clip::Image {
+                        bytes,
+                        mime: "image/png",
+                    }));
+                }
+            }
+
+            // Priority 2: TIFF image (Apple-native screenshot fallback).
+            let tiff_uti = unsafe { NSPasteboardTypeTIFF };
+            if types.containsObject(tiff_uti) {
+                if let Some(data) = pb.dataForType(tiff_uti) {
+                    let bytes = data.to_vec();
+                    return Ok(Some(super::Clip::Image {
+                        bytes,
+                        mime: "image/tiff",
+                    }));
+                }
+            }
+
+            // Priority 3: file URLs. Walk the per-item pasteboard so multi-file
+            // selections (Finder copy of N files) come through as N entries.
+            let file_uti = unsafe { NSPasteboardTypeFileURL };
+            if types.containsObject(file_uti) {
+                let mut paths: Vec<PathBuf> = Vec::new();
+                if let Some(items) = pb.pasteboardItems() {
+                    let n = items.count();
+                    for i in 0..n {
+                        let item = items.objectAtIndex(i);
+                        if let Some(url_str) = item.stringForType(file_uti) {
+                            let s = url_str.to_string();
+                            // Prefer NSURL parsing (handles percent-encoding); fall
+                            // back to a "file://" string-strip for malformed input.
+                            let ns = NSString::from_str(&s);
+                            if let Some(url) = NSURL::URLWithString(&ns) {
+                                if let Some(path_str) = url.path() {
+                                    paths.push(PathBuf::from(path_str.to_string()));
+                                    continue;
+                                }
+                            }
+                            if let Some(stripped) = s.strip_prefix("file://") {
+                                paths.push(PathBuf::from(stripped));
+                            }
+                        }
+                    }
+                }
+                if !paths.is_empty() {
+                    return Ok(Some(super::Clip::Files(paths)));
+                }
+            }
+
+            // No image / file types we recognise — let read_clip fall through
+            // to the cross-platform text path.
+            Ok(None)
+        })
     }
 
     pub fn is_transient_macos() -> bool {
@@ -147,5 +213,15 @@ mod tests {
         // Linux / Windows / etc. have no NSPasteboard; the fallback must be
         // false so the watcher does not silently skip every clip.
         assert!(!is_transient());
+    }
+
+    #[test]
+    #[cfg(not(target_os = "macos"))]
+    fn read_clip_text_or_empty_on_non_macos() {
+        // On non-macOS we don't go through NSPasteboard; the read path is
+        // arboard text + Empty fallback. Test only that we get a valid Clip
+        // variant that's NOT Image/Files (those branches don't exist here).
+        let clip = read_clip().unwrap();
+        assert!(matches!(clip, Clip::Empty | Clip::Text(_)));
     }
 }
