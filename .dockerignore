@@ -1,0 +1,7 @@
+target/
+.git/
+docs/
+mcpb/
+*.mcpb
+*.swp
+.DS_Store
