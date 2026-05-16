@@ -14,7 +14,7 @@ jobs:
     name: Build macOS universal binary
     runs-on: macos-14
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Rust stable (both targets)
         uses: dtolnay/rust-toolchain@stable
@@ -141,7 +141,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download .mcpb artifact
         uses: actions/download-artifact@v8
