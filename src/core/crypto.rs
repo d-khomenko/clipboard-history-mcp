@@ -2,7 +2,7 @@ use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Nonce};
 use anyhow::{anyhow, Result};
 use keyring_core::{Entry, Error as KeyringError};
-use rand::RngCore;
+use rand::Rng;
 
 const KEYCHAIN_SERVICE: &str = "clipboard-history-mcp";
 const KEYCHAIN_ACCOUNT_V1: &str = "master-key-v1";

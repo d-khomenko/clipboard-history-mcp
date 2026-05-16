@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Context, Result};
 use argon2::{Algorithm, Argon2, Params, Version};
-use rand::RngCore;
+use rand::Rng;
 
 pub const SALT_LEN: usize = 16;
 pub const KEK_LEN: usize = 32;

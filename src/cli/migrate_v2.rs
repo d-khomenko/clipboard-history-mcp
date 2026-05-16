@@ -3,6 +3,7 @@ use crate::core::crypto::{
 };
 use crate::core::master_password::{prompt_password_with_confirmation, wrap_master_key};
 use anyhow::Result;
+use rand::Rng;
 
 pub fn migrate_v2() -> Result<()> {
     // macOS: v3 used ~/Library/Application Support/clipboard-history-mcp/
@@ -46,7 +47,7 @@ pub fn migrate_v2() -> Result<()> {
 fn set_fresh_password() -> Result<()> {
     let pw = prompt_password_with_confirmation()?;
     let mut master = [0u8; 32];
-    rand::RngCore::fill_bytes(&mut rand::rng(), &mut master);
+    rand::rng().fill_bytes(&mut master);
     let wrapped = wrap_master_key(&master, &pw)?;
     write_master_key_v2(&wrapped)?;
     println!("New master key set under master-key-v2.");
