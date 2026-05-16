@@ -110,14 +110,14 @@ pub fn extension_for_mime(mime: &str) -> &'static str {
 mod tests {
     use super::*;
     use std::path::Path;
-    use std::sync::Mutex;
 
-    /// Tests share an env-var override of CLIPBOARD_DATA_DIR. Serialise so
-    /// they don't race on the global env.
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
+    /// Tests share a process-global env-var override of `CLIPBOARD_DATA_DIR`.
+    /// Use the crate-wide `test_util::ENV_LOCK` so we serialise against
+    /// every other test module that touches env vars (e.g. `cli::*` tests).
+    use crate::test_util::ENV_LOCK;
 
     fn with_temp_data_dir<F: FnOnce(&Path)>(f: F) {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = tempfile::TempDir::new().unwrap();
         std::env::set_var("CLIPBOARD_DATA_DIR", tmp.path());
         f(tmp.path());
