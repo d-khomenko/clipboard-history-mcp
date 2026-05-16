@@ -7,6 +7,13 @@ pub mod migrate_v2;
 pub mod status;
 pub mod uninstall;
 pub mod vault;
+pub mod store_helper;
+pub mod copy_cmd;
+pub mod pin_cmd;
+pub mod unpin_cmd;
+pub mod delete_cmd;
+pub mod clear_cmd;
+pub mod unlock_secret_cmd;
 
 #[derive(Parser)]
 #[command(name = "clipboard-history-mcp", version, about = "Cross-platform clipboard history MCP")]
@@ -58,5 +65,40 @@ pub enum Cmd {
         /// Skip the confirmation prompt and delete immediately.
         #[arg(short, long)]
         yes: bool,
+    },
+    /// Restore a clip to the system pasteboard. Used by Klipta's `CopyAction`.
+    Copy {
+        #[arg(value_name = "ID")]
+        id: i64,
+    },
+    /// Pin a clip.
+    Pin {
+        #[arg(value_name = "ID")]
+        id: i64,
+    },
+    /// Unpin a clip.
+    Unpin {
+        #[arg(value_name = "ID")]
+        id: i64,
+    },
+    /// Hard-delete a clip and its secrets row if applicable.
+    Delete {
+        #[arg(value_name = "ID")]
+        id: i64,
+    },
+    /// Clear history. Scope: `all` | `older-than-days:N` | `kind:K`.
+    Clear {
+        #[arg(long, value_name = "SCOPE")]
+        scope: String,
+        /// Skip the confirmation prompt.
+        #[arg(short, long)]
+        yes: bool,
+    },
+    /// Decrypt and emit a stored secret on stdout. Touch ID gated.
+    UnlockSecret {
+        #[arg(value_name = "ID")]
+        id: i64,
+        #[arg(long, value_name = "REASON")]
+        reason: String,
     },
 }
