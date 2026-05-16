@@ -57,6 +57,83 @@ jobs:
           name: clipboard-history-mcp-mcpb
           path: clipboard-history-mcp.mcpb
 
+  cargo-publish:
+    name: Publish to crates.io
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry + build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-publish-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-publish-
+
+      - name: Verify package
+        run: cargo package --list >/dev/null
+
+      - name: Publish to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish --token "$CARGO_REGISTRY_TOKEN"
+
+  mcp-publish:
+    name: Publish to MCP Registry
+    needs: build-macos
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download .mcpb artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: clipboard-history-mcp-mcpb
+
+      - name: Extract tag version (strip leading 'v')
+        id: tag
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Compute .mcpb sha256
+        id: hash
+        run: |
+          sha256=$(openssl dgst -sha256 -r clipboard-history-mcp.mcpb | awk '{print $1}')
+          echo "sha256=${sha256}" >> "$GITHUB_OUTPUT"
+          echo "::notice::clipboard-history-mcp.mcpb sha256=${sha256}"
+
+      - name: Substitute server.json placeholders
+        run: |
+          sed -i \
+            -e "s|__VERSION__|${{ steps.tag.outputs.version }}|g" \
+            -e "s|__SHA256__|${{ steps.hash.outputs.sha256 }}|g" \
+            server.json
+          echo "--- server.json after substitution ---"
+          cat server.json
+
+      - name: Install mcp-publisher
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" -o /tmp/mcp-publisher.tar.gz
+          tar -xzf /tmp/mcp-publisher.tar.gz -C /tmp
+          sudo mv /tmp/mcp-publisher /usr/local/bin/
+          mcp-publisher --version
+
+      - name: Login (GitHub OIDC)
+        run: mcp-publisher login github-oidc
+
+      - name: Publish to registry
+        run: mcp-publisher publish
+
   release:
     name: Create GitHub Release
     needs: build-macos

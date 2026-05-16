@@ -41,6 +41,9 @@ Claude: Found, restoring. ✓ ready to ⌘V.
 
 You: "What code did I copy from ChatGPT over the last 2 hours?"
 Claude: 3 Python snippets, 1 SQL query, 1 shell command.
+
+You: "Show me the screenshot I just copied"
+Claude: Returns a 142×120 PNG, mime image/png, captured from Preview 2 minutes ago.
 ```
 
 Search uses SQLite **FTS5** + window-title indexing — you find clips by *where* you copied them, not just by content.
@@ -84,6 +87,18 @@ claude mcp add -s user clipboard-history -- ./ext/server/clipboard-history-mcp s
 # install background daemon (captures even when Claude is closed)
 ./ext/server/clipboard-history-mcp install
 ```
+
+### Quick install — `cargo install`
+
+If you have a Rust toolchain (Rust 1.95+) and use Claude Code:
+
+```bash
+cargo install clipboard-history-mcp
+clipboard-history-mcp install                      # start daemon
+claude mcp add -s user clipboard-history -- clipboard-history-mcp serve
+```
+
+This pulls a release crate from crates.io and compiles locally. Slightly slower than the `.mcpb` drag-and-drop above (compile takes ~2 min on Apple Silicon), but it's the cleanest path for Claude Code users — three commands and you're capturing.
 
 ### From source (macOS)
 
@@ -158,6 +173,8 @@ How many secrets are in my clipboard vault, by kind?
 
 Pin the JSON I just copied — I'll need it again.
 
+Show me only my pinned clips.
+
 What apps did I copy from most this week?
 
 Restore that GitHub PR link to my clipboard.
@@ -174,12 +191,13 @@ Set env vars in the launchd plist (`install` writes them) or via `claude mcp add
 | Variable | Default | What it does |
 |---|---|---|
 | `CLIPBOARD_POLL_MS` | `1500` | Watcher poll interval (ms) |
-| `CLIPBOARD_HISTORY_MAX` | `1000` | Ring-buffer size |
+| `CLIPBOARD_HISTORY_MAX` | `1000` | Ring-buffer size (unpinned clips only — pinned items sit outside the ring buffer) |
 | `CLIPBOARD_CAPTURE_WINDOW_TITLE` | `0` | Capture window titles (needs Accessibility permission) |
 | `CLIPBOARD_IGNORE_APPS` | *(empty)* | Comma-separated app display names to skip |
 | `CLIPBOARD_NEVER_STORE_SECRETS` | `0` | Paranoid mode — metadata only, no ciphertext |
 | `CLIPBOARD_DATA_DIR` | `~/Library/Application Support/clipboard-history-mcp` | Override data dir |
 | `CLIPBOARD_VAULT_PATH` | *(empty)* | Auto-mirror non-secret clips to this Obsidian vault directory (sidecar `.md` per clip + bullet in `daily/YYYY-MM-DD.md`). Set via `--vault PATH` at install time. |
+| `CLIPBOARD_MAX_BLOB_BYTES` | `26214400` (25 MB) | Skip image / file pasteboards larger than this. Logs a `WARN` line with the source app + size. |
 
 ---
 
@@ -189,7 +207,7 @@ Set env vars in the launchd plist (`install` writes them) or via `claude mcp add
 
 | | |
 |---|---|
-| `list_history(limit?, kind?, source_app?, since?, pinned_only?)` | Paginated history, newest first |
+| `list_history(limit?, kind?, source_app?, since?, pinned_only?)` | Paginated history, newest first. `pinned_only=true` returns only pinned clips. |
 | `get_item(id)` | Single clip by id |
 | `search_history(query, limit?)` | FTS5 BM25 across preview + window title |
 | `get_urls(limit?)` | URL clips, deduped by hostname |

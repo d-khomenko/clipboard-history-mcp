@@ -1,0 +1,57 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.d-khomenko/clipboard-history-mcp",
+  "description": "Type-aware, secret-safe clipboard history exposed to Claude via MCP. macOS + Linux. One Rust binary.",
+  "version": "__VERSION__",
+  "websiteUrl": "https://github.com/d-khomenko/clipboard-history-mcp",
+  "repository": {
+    "url": "https://github.com/d-khomenko/clipboard-history-mcp",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "mcpb",
+      "identifier": "https://github.com/d-khomenko/clipboard-history-mcp/releases/download/v__VERSION__/clipboard-history-mcp.mcpb",
+      "version": "__VERSION__",
+      "fileSha256": "__SHA256__",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "CLIPBOARD_VAULT_PATH",
+          "description": "Optional Obsidian vault directory. When set, the daemon mirrors every non-secret clip to <vault>/clipboard/YYYY-MM/<id>-<kind>-<slug>.md plus a daily-note bullet. Secrets are never mirrored."
+        },
+        {
+          "name": "CLIPBOARD_HISTORY_MAX",
+          "description": "Ring-buffer size for unpinned clips (default 1000). Pinned clips sit outside the limit."
+        },
+        {
+          "name": "CLIPBOARD_NEVER_STORE_SECRETS",
+          "description": "Paranoid mode — set to '1' to drop all secret/image/file clips at capture time. Metadata-only logging."
+        },
+        {
+          "name": "CLIPBOARD_MAX_BLOB_BYTES",
+          "description": "Max byte size for image / file payloads (default 26214400 = 25 MB). Larger blobs are skipped with a WARN log."
+        },
+        {
+          "name": "CLIPBOARD_IGNORE_APPS",
+          "description": "Comma-separated app names to skip (e.g. '1Password,Bitwarden'). Secondary defence after the NSPasteboard concealed-type check."
+        },
+        {
+          "name": "CLIPBOARD_CAPTURE_WINDOW_TITLE",
+          "description": "Set to '1' to record the front window title for each capture. Requires Accessibility permission on macOS."
+        }
+      ]
+    }
+  ],
+  "_meta": {
+    "io.modelcontextprotocol.registry/publisher-provided": {
+      "tool": {
+        "version": "T5"
+      },
+      "categories": ["productivity", "developer-tools"],
+      "tags": ["clipboard", "history", "secrets", "macOS", "Linux", "rust"]
+    }
+  }
+}

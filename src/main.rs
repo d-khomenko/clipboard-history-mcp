@@ -92,6 +92,10 @@ async fn run_daemon() -> Result<()> {
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(1000),
+        max_blob_bytes: std::env::var("CLIPBOARD_MAX_BLOB_BYTES")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(26_214_400),
         vault_mirror: std::env::var("CLIPBOARD_VAULT_PATH")
             .ok()
             .filter(|s| !s.trim().is_empty())
