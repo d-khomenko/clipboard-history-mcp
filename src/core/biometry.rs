@@ -144,13 +144,176 @@ mod macos {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex as StdMutex;
+
+    /// Serializes tests that mutate the process-global `AUTH_CACHE`.
+    ///
+    /// `cargo test` runs unit tests in parallel within a single process. Because
+    /// the cache is a `OnceLock<Mutex<Option<Instant>>>` shared across the whole
+    /// crate, parallel tests would race on it: one test might prime the cache
+    /// just as another asserts emptiness. This mutex forces strict ordering for
+    /// the subset of tests that touch the cache. Tests that don't touch the
+    /// cache (e.g. constructor checks) don't need to hold it.
+    static CACHE_TEST_LOCK: StdMutex<()> = StdMutex::new(());
+
+    /// Clears `AUTH_CACHE` so a test can start from a known-cold state.
+    ///
+    /// Test-only — production code never resets the cache; the 5-minute TTL is
+    /// the sole expiry mechanism in real use.
+    fn reset_cache() {
+        let cache = AUTH_CACHE.get_or_init(|| Mutex::new(None));
+        let mut g = cache.lock().expect("cache mutex");
+        *g = None;
+    }
+
+    /// Manually sets the cache's last-success timestamp.
+    ///
+    /// Test-only — lets a test simulate "the cache was primed N seconds ago"
+    /// without having to call the platform `evaluate_inner` (which prompts the
+    /// user). Using `Instant::now() - dur` synthesizes an aged entry.
+    fn set_cache_at(t: Instant) {
+        let cache = AUTH_CACHE.get_or_init(|| Mutex::new(None));
+        let mut g = cache.lock().expect("cache mutex");
+        *g = Some(t);
+    }
+
+    // --- construction ---
+
+    #[test]
+    fn new_is_zero_sized_and_constructible() {
+        let _g = BiometryGate::new();
+        // Sanity: the marker struct holds no state.
+        assert_eq!(std::mem::size_of::<BiometryGate>(), 0);
+    }
+
+    #[test]
+    #[allow(clippy::default_constructed_unit_structs)]
+    fn default_matches_new() {
+        // Both paths must produce an equivalent gate; the type has no fields
+        // to compare directly, so we assert size invariance instead.
+        // The `Default::default()` call is intentional: it's the whole point of
+        // this test (verify the `Default` impl is wired up), so we silence the
+        // unit-struct lint that would otherwise nudge us to drop it.
+        let _a = BiometryGate::default();
+        let _b = BiometryGate::new();
+        assert_eq!(std::mem::size_of_val(&_a), std::mem::size_of_val(&_b));
+    }
+
+    #[test]
+    fn gate_is_send_and_sync() {
+        // The gate is shared across MCP request handlers and must be safe to
+        // move between threads. The marker assertion fails at compile time if
+        // the bounds regress.
+        fn assert_send_sync<T: Send + Sync>() {}
+        assert_send_sync::<BiometryGate>();
+    }
+
+    // --- cache TTL constant ---
+
+    #[test]
+    fn cache_ttl_is_five_minutes() {
+        // The 5-minute window is part of the security contract: longer windows
+        // weaken the biometric gate; shorter ones harm UX. Pin the value so a
+        // future tweak fails this test and forces an intentional decision.
+        assert_eq!(CACHE_TTL, Duration::from_secs(300));
+    }
+
+    // --- cache_hit / mark_cache primitives ---
+
+    #[test]
+    fn cache_hit_false_when_empty() {
+        let _g = CACHE_TEST_LOCK.lock().unwrap();
+        reset_cache();
+        assert!(!cache_hit(), "empty cache must not register as a hit");
+    }
+
+    #[test]
+    fn mark_cache_then_hit_returns_true() {
+        let _g = CACHE_TEST_LOCK.lock().unwrap();
+        reset_cache();
+        mark_cache();
+        assert!(cache_hit(), "fresh mark must register as a hit");
+    }
+
+    #[test]
+    fn cache_hit_false_when_entry_older_than_ttl() {
+        let _g = CACHE_TEST_LOCK.lock().unwrap();
+        // Plant an entry that's already past the 5-minute window. We add an
+        // extra second so we're definitively over the boundary regardless of
+        // sub-second timing on slow CI.
+        let aged = Instant::now() - (CACHE_TTL + Duration::from_secs(1));
+        set_cache_at(aged);
+        assert!(
+            !cache_hit(),
+            "entry older than CACHE_TTL must not register as a hit"
+        );
+    }
+
+    #[test]
+    fn cache_hit_true_just_under_ttl() {
+        let _g = CACHE_TEST_LOCK.lock().unwrap();
+        // 60s in the past — well within the 5-minute window.
+        let recent = Instant::now() - Duration::from_secs(60);
+        set_cache_at(recent);
+        assert!(cache_hit(), "entry inside CACHE_TTL must register as a hit");
+    }
+
+    #[test]
+    fn mark_cache_is_idempotent_and_refreshes_timestamp() {
+        let _g = CACHE_TEST_LOCK.lock().unwrap();
+        reset_cache();
+        mark_cache();
+        let cache = AUTH_CACHE.get_or_init(|| Mutex::new(None));
+        let t1 = cache.lock().unwrap().expect("primed");
+        // A second call must overwrite the prior timestamp, not append or panic.
+        std::thread::sleep(Duration::from_millis(2));
+        mark_cache();
+        let t2 = cache.lock().unwrap().expect("re-primed");
+        assert!(t2 >= t1, "second mark_cache should refresh the timestamp");
+    }
+
+    // --- evaluate() short-circuit path ---
+    //
+    // `BiometryGate::evaluate` has two branches: a cache-hit fast-path that
+    // returns Ok(true) without ever touching the platform layer, and the
+    // platform-dispatch slow path. We can exercise the first branch in CI
+    // because it's pure Rust; the second still requires Touch ID and stays
+    // behind `#[ignore]`.
+
+    #[test]
+    fn evaluate_short_circuits_on_cache_hit() {
+        let _g = CACHE_TEST_LOCK.lock().unwrap();
+        // Prime the cache with a fresh timestamp — `evaluate` should bypass
+        // every platform-specific code path and return Ok(true) directly.
+        set_cache_at(Instant::now());
+        let gate = BiometryGate::new();
+        let r = gate.evaluate("unit-test: should not prompt").expect("ok");
+        assert!(r, "primed cache must short-circuit evaluate() to true");
+    }
+
+    #[test]
+    fn evaluate_does_not_consume_cache() {
+        let _g = CACHE_TEST_LOCK.lock().unwrap();
+        // The cache is a TTL window, not a single-use ticket: multiple
+        // evaluate() calls inside the window must all succeed without ever
+        // re-prompting.
+        set_cache_at(Instant::now());
+        let gate = BiometryGate::new();
+        for i in 0..3 {
+            let r = gate.evaluate(&format!("call {i}")).expect("ok");
+            assert!(r, "call {i} should short-circuit on the still-valid cache");
+        }
+    }
 
     /// Verifies that two rapid calls within the 5-minute window short-circuit on
-    /// the second attempt (cache hit). Because this test triggers the system
-    /// Touch ID / password UI it is `#[ignore]`d by default.
+    /// the second attempt (cache hit). Because the *first* call triggers the
+    /// system Touch ID / password UI this test is `#[ignore]`d by default — run
+    /// it manually with `cargo test -- --ignored` on a machine with biometrics.
     #[test]
     #[ignore] // requires user interaction and Touch ID / password prompt
-    fn cache_hit_on_second_call() {
+    fn cache_hit_on_second_call_end_to_end() {
+        let _g = CACHE_TEST_LOCK.lock().unwrap();
+        reset_cache();
         let gate = BiometryGate::new();
         let r1 = gate.evaluate("test: first call");
         assert!(r1.unwrap(), "first call should succeed with user interaction");
