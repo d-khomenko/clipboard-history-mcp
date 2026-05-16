@@ -46,7 +46,7 @@ pub fn migrate_v2() -> Result<()> {
 fn set_fresh_password() -> Result<()> {
     let pw = prompt_password_with_confirmation()?;
     let mut master = [0u8; 32];
-    rand::RngCore::fill_bytes(&mut rand::thread_rng(), &mut master);
+    rand::RngCore::fill_bytes(&mut rand::rng(), &mut master);
     let wrapped = wrap_master_key(&master, &pw)?;
     write_master_key_v2(&wrapped)?;
     println!("New master key set under master-key-v2.");

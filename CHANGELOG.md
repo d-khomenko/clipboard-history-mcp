@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.0-alpha.0] - 2026-05-16
+
 ### Added
 - **MCP Registry publishability** (T5). New `server.json` at repo root + `SECURITY.md`. Release CI gains a `mcp-publish` job that runs on tag push, authenticates via GitHub OIDC (no PAT needed), substitutes the tag version and `.mcpb` sha256 into `server.json`, and pushes to `registry.modelcontextprotocol.io`. After this lands and a `v*` tag fires, the project will be discoverable at `https://registry.modelcontextprotocol.io/v0.1/servers?search=clipboard-history-mcp` and downstream aggregators (PulseMCP, Glama, Claude Desktop's catalog).
 - **`cargo install clipboard-history-mcp`** — Claude Code users can now install the daemon in one command instead of cloning + `cargo build --release`. Pulls from crates.io and compiles locally. Cargo.toml gains `keywords`, `categories`, `readme`, `documentation` metadata required for crates.io publish; release CI gains a `cargo-publish` job that runs on tag push gated on the `CARGO_REGISTRY_TOKEN` secret.
@@ -51,6 +53,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 - **README: Performance section** — measured idle footprint on Apple Silicon (0.05 % CPU, ~24 MB RSS, ~1 mW avg power, ~1 % battery per 3 weeks of continuous run) with a log-scale Mermaid bar chart comparing against typical background apps (Chrome tab, Slack, Spotify, YouTube).
+
+### Dependencies
+- Bumped `tokio` 1.52.2 → 1.52.3 (patch).
+- Bumped `keyring` 4.0.0 → 4.0.1 (patch).
+- Bumped `sha2` 0.10.9 → 0.11.0 (0.x major; compatible with our hash usage).
+- Bumped `rand` 0.8.6 → 0.9.4 (major; `thread_rng()` deprecated and replaced with `rng()` throughout `core/crypto.rs`, `core/master_password.rs`, `cli/migrate_v2.rs`).
+- Bumped `schemars` 0.9.0 → 1.2.1 (major; no API breakage in our usage).
+- Bumped GitHub Actions: `actions/checkout` v4 → v6, `actions/cache` v4 → v5, `actions/upload-artifact` v4 → v7, `actions/download-artifact` v4 → v8, `softprops/action-gh-release` v2 → v3.
 
 ## [0.5.0-alpha.0] — 2026-05-06
 

@@ -26,7 +26,7 @@ fn ensure_keyring_store() {
 pub fn encrypt(plaintext: &str, key: &[u8; 32]) -> Result<(Vec<u8>, [u8; 12])> {
     let cipher = Aes256Gcm::new(key.into());
     let mut nonce = [0u8; 12];
-    rand::thread_rng().fill_bytes(&mut nonce);
+    rand::rng().fill_bytes(&mut nonce);
     let n = Nonce::from_slice(&nonce);
     let ct = cipher
         .encrypt(n, plaintext.as_bytes())
@@ -91,14 +91,14 @@ fn write_master_key_v1(key: &[u8; 32]) -> Result<()> {
 
 fn generate_master_key() -> [u8; 32] {
     let mut k = [0u8; 32];
-    rand::thread_rng().fill_bytes(&mut k);
+    rand::rng().fill_bytes(&mut k);
     k
 }
 
 pub fn encrypt_bytes(plaintext: &[u8], key: &[u8; 32]) -> Result<(Vec<u8>, [u8; 12])> {
     let cipher = Aes256Gcm::new(key.into());
     let mut nonce = [0u8; 12];
-    rand::thread_rng().fill_bytes(&mut nonce);
+    rand::rng().fill_bytes(&mut nonce);
     let n = Nonce::from_slice(&nonce);
     let ct = cipher
         .encrypt(n, plaintext)
