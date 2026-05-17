@@ -14,6 +14,7 @@ pub mod unpin_cmd;
 pub mod delete_cmd;
 pub mod clear_cmd;
 pub mod unlock_secret_cmd;
+pub mod audit;
 
 #[derive(Parser)]
 #[command(name = "clipboard-history-mcp", version, about = "Cross-platform clipboard history MCP")]
@@ -101,4 +102,6 @@ pub enum Cmd {
         #[arg(long, value_name = "REASON")]
         reason: String,
     },
+    /// Emit recent audit-log entries as JSON. Used by Klipta's `AuditPanel`.
+    Audit(crate::cli::audit::AuditArgs),
 }

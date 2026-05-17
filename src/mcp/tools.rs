@@ -98,6 +98,8 @@ pub struct ClearParams {
 impl ClipboardServer {
     #[tool(description = "List recent clipboard entries, newest first. Secret values are never returned — only metadata.")]
     async fn list_history(&self, Parameters(p): Parameters<ListParams>) -> String {
+        self.store.write_audit("mcp:claude-code", "read", "list_history", None,
+                               p.kind.as_deref());
         let limit = p.limit.unwrap_or(20);
         let pinned_only = p.pinned_only.unwrap_or(false);
         match self.store.list_with(p.kind.as_deref(), limit, p.offset.unwrap_or(0), pinned_only) {
@@ -108,6 +110,7 @@ impl ClipboardServer {
 
     #[tool(description = "Fetch one clipboard entry by id. For secrets returns metadata only. Pass with_blob=true to inline an image/file blob as a base64 data URL.")]
     async fn get_item(&self, Parameters(p): Parameters<GetItemParams>) -> String {
+        self.store.write_audit("mcp:claude-code", "read", "get_item", Some(p.id), None);
         match self.store.get_item(p.id) {
             Ok(Some(item)) => {
                 let requires_unlock = item.primary_kind.starts_with("secret:");
@@ -140,6 +143,8 @@ impl ClipboardServer {
 
     #[tool(description = "Full-text search clipboard history (FTS5 BM25).")]
     async fn search_history(&self, Parameters(p): Parameters<SearchParams>) -> String {
+        self.store.write_audit("mcp:claude-code", "read", "search_history", None,
+                               Some(p.query.as_str()));
         let limit = p.limit.unwrap_or(20);
         match self.store.search(&p.query, limit) {
             Ok(items) => serde_json::json!({ "count": items.len(), "items": items }).to_string(),
@@ -149,6 +154,7 @@ impl ClipboardServer {
 
     #[tool(description = "Return URL clips, deduped by host.")]
     async fn get_urls(&self, Parameters(p): Parameters<LimitParams>) -> String {
+        self.store.write_audit("mcp:claude-code", "read", "get_urls", None, None);
         let limit = p.limit.unwrap_or(20);
         match self.store.list_with(Some("url"), 200, 0, false) {
             Ok(items) => {
@@ -183,6 +189,8 @@ impl ClipboardServer {
 
     #[tool(description = "Return code clips, optionally filtered by language.")]
     async fn get_code(&self, Parameters(p): Parameters<GetCodeParams>) -> String {
+        self.store.write_audit("mcp:claude-code", "read", "get_code", None,
+                               p.language.as_deref());
         let limit = p.limit.unwrap_or(20);
         let kind = p.language.as_ref().map(|l| format!("code:{}", l.to_lowercase()));
         let res = match kind {
@@ -201,6 +209,7 @@ impl ClipboardServer {
 
     #[tool(description = "Return JSON clips with parsed structure preview.")]
     async fn get_json(&self, Parameters(p): Parameters<LimitParams>) -> String {
+        self.store.write_audit("mcp:claude-code", "read", "get_json", None, None);
         let limit = p.limit.unwrap_or(20);
         match self.store.list_with(Some("json"), limit, 0, false) {
             Ok(items) => {
@@ -225,6 +234,8 @@ impl ClipboardServer {
 
     #[tool(description = "List secret clip metadata only — no values.")]
     async fn get_secrets_index(&self, Parameters(p): Parameters<SecretsIndexParams>) -> String {
+        self.store.write_audit("mcp:claude-code", "read", "get_secrets_index", None,
+                               p.kind.as_deref());
         let filter = p.kind.as_ref().map(|k| format!("secret:{}", k));
         let res = match filter.as_deref() {
             Some(k) => self.store.list_with(Some(k), 200, 0, false),
@@ -262,12 +273,22 @@ impl ClipboardServer {
             .biometry
             .evaluate(&format!("Reveal stored secret #{}: {}", p.id, p.reason))
         {
-            Ok(false) => return "error: biometric authentication failed".into(),
-            Err(e) => return format!("error: biometry error: {}", e),
+            Ok(false) => {
+                self.store.write_audit("mcp:claude-code", "blocked", "unlock_secret",
+                                       Some(p.id), Some(p.reason.as_str()));
+                return "error: biometric authentication failed".into();
+            }
+            Err(e) => {
+                self.store.write_audit("mcp:claude-code", "blocked", "unlock_secret",
+                                       Some(p.id), Some(p.reason.as_str()));
+                return format!("error: biometry error: {}", e);
+            }
             Ok(true) => {}
         }
         match self.store.unlock_secret(p.id) {
             Ok(value) => {
+                self.store.write_audit("mcp:claude-code", "reveal", "unlock_secret",
+                                       Some(p.id), Some(p.reason.as_str()));
                 let last_chars: String = value
                     .chars()
                     .rev()
@@ -278,12 +299,17 @@ impl ClipboardServer {
                     .collect();
                 serde_json::json!({ "value": value, "lastChars": last_chars }).to_string()
             }
-            Err(e) => format!("error: {}", e),
+            Err(e) => {
+                self.store.write_audit("mcp:claude-code", "blocked", "unlock_secret",
+                                       Some(p.id), Some("decrypt_failed"));
+                format!("error: {}", e)
+            }
         }
     }
 
     #[tool(description = "Restore a clip to the system clipboard. Refuses secrets — use unlock_secret first. Image and file clips are restored via NSPasteboard with the correct UTI on macOS.")]
     async fn copy_item(&self, Parameters(p): Parameters<IdParams>) -> String {
+        self.store.write_audit("mcp:claude-code", "write", "copy_item", Some(p.id), None);
         match self.store.get_item(p.id) {
             Ok(Some(item)) => {
                 if item.primary_kind.starts_with("secret:") {
@@ -347,6 +373,8 @@ impl ClipboardServer {
 
     #[tool(description = "Pin or unpin a clip.")]
     async fn pin_item(&self, Parameters(p): Parameters<PinParams>) -> String {
+        self.store.write_audit("mcp:claude-code", "write", "pin_item", Some(p.id),
+                               Some(if p.pinned { "pin" } else { "unpin" }));
         match self.store.pin(p.id, p.pinned) {
             Ok(_) => r#"{"ok":true}"#.into(),
             Err(e) => format!("error: {}", e),
@@ -355,6 +383,8 @@ impl ClipboardServer {
 
     #[tool(description = "Add or remove a tag on a clip.")]
     async fn tag_item(&self, Parameters(p): Parameters<TagParams>) -> String {
+        self.store.write_audit("mcp:claude-code", "write", "tag_item", Some(p.id),
+                               Some(p.tag.as_str()));
         let r = if p.remove.unwrap_or(false) {
             self.store.untag(p.id, &p.tag)
         } else {
@@ -368,6 +398,7 @@ impl ClipboardServer {
 
     #[tool(description = "Hard-delete a clip (and its secrets row if applicable).")]
     async fn delete_item(&self, Parameters(p): Parameters<IdParams>) -> String {
+        self.store.write_audit("mcp:claude-code", "write", "delete_item", Some(p.id), None);
         match self.store.delete(p.id) {
             Ok(_) => r#"{"ok":true}"#.into(),
             Err(e) => format!("error: {}", e),
@@ -376,6 +407,8 @@ impl ClipboardServer {
 
     #[tool(description = "Clear history. scope: 'all' | 'older_than_days:N' | 'kind:K'")]
     async fn clear_history(&self, Parameters(p): Parameters<ClearParams>) -> String {
+        self.store.write_audit("mcp:claude-code", "write", "clear_history", None,
+                               Some(p.scope.as_str()));
         let r = if p.scope == "all" {
             self.store.clear_all()
         } else if let Some(rest) = p.scope.strip_prefix("older_than_days:") {

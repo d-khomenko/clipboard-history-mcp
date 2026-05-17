@@ -49,6 +49,7 @@ async fn main() -> Result<()> {
         Cmd::UnlockSecret { id, reason } => {
             clipboard_history_mcp::cli::unlock_secret_cmd::run(id, &reason)
         }
+        Cmd::Audit(args) => clipboard_history_mcp::cli::audit::run(args),
     }
 }
 
