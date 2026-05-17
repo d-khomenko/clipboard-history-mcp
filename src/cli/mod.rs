@@ -7,6 +7,7 @@ pub mod migrate_v2;
 pub mod status;
 pub mod uninstall;
 pub mod vault;
+pub mod audit;
 
 #[derive(Parser)]
 #[command(name = "clipboard-history-mcp", version, about = "Cross-platform clipboard history MCP")]
@@ -59,4 +60,6 @@ pub enum Cmd {
         #[arg(short, long)]
         yes: bool,
     },
+    /// Emit recent audit-log entries as JSON. Used by Klipta's `AuditPanel`.
+    Audit(crate::cli::audit::AuditArgs),
 }
