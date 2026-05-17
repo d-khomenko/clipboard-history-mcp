@@ -1,5 +1,6 @@
 use crate::core::{
     pasteboard,
+    recipe_engine::RecipeEngine,
     secrets,
     store::{ClipInput, SecretInput, Store},
     types,
@@ -7,7 +8,7 @@ use crate::core::{
 use crate::daemon::context;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tracing::{info, warn};
 
@@ -21,6 +22,9 @@ pub struct WatcherOptions {
     /// Configured Obsidian vault for daemon-side mirroring of non-secret
     /// clips. `None` disables the feature; capture proceeds unchanged.
     pub vault_mirror: Option<crate::core::vault::VaultMirror>,
+    /// Recipe engine. Shared across the watcher thread via `Arc<Mutex<...>>`.
+    /// `None` disables the workflow engine entirely.
+    pub recipe_engine: Option<Arc<Mutex<RecipeEngine>>>,
 }
 
 impl Default for WatcherOptions {
@@ -33,6 +37,7 @@ impl Default for WatcherOptions {
             max_items: 1000,
             max_blob_bytes: 26_214_400, // 25 MB
             vault_mirror: None,
+            recipe_engine: None,
         }
     }
 }
@@ -145,6 +150,8 @@ fn tick(
                 window_title: ctx.window_title.clone(),
             })?;
             info!("image captured: id={} mime={} from {:?}", id, mime, ctx.front_app);
+            run_ocr_async(store, id);
+            fire_recipes(opts, store, id);
             mirror_image_or_file(opts, &ctx, store, id)?;
             store.prune_oldest(opts.max_items)?;
             Ok(())
@@ -181,12 +188,63 @@ fn tick(
             })?;
             info!("files captured: {:?} from {:?}", ids, ctx.front_app);
             for id in ids {
+                fire_recipes(opts, store, id);
                 mirror_image_or_file(opts, &ctx, store, id)?;
             }
             store.prune_oldest(opts.max_items)?;
             Ok(())
         }
     }
+}
+
+/// Spawn an OS thread to run OCR on the blob just written for `clip_id` and
+/// write the result back to `clips.ocr_text`. The schema `clips_au` trigger
+/// propagates the change to `clips_fts` automatically.
+///
+/// Errors are logged at WARN and swallowed so OCR never blocks or breaks
+/// the main capture loop.
+fn run_ocr_async(store: &Store, clip_id: i64) {
+    // Retrieve the blob_path so we can pass the absolute file path to OCR.
+    // If the row is missing or has no blob (shouldn't happen for image clips
+    // we just inserted), silently bail.
+    let blob_rel = match store.get_item(clip_id) {
+        Ok(Some(item)) => item.blob_path,
+        _ => return,
+    };
+    let Some(rel) = blob_rel else { return };
+    let abs_path = crate::core::blobs::absolute_path(&rel);
+    let db_path = crate::core::paths::db_path();
+
+    std::thread::spawn(move || {
+        match crate::core::ocr::run_ocr(&abs_path) {
+            Ok(Some(text)) => {
+                // Open a fresh raw connection for the write-back — we only
+                // need a plain UPDATE, no crypto. The primary Store is !Send
+                // so we cannot reuse it across threads.
+                match crate::core::db::open_db(&db_path) {
+                    Ok(conn) => {
+                        let result = conn.execute(
+                            "UPDATE clips SET ocr_text = ?1 WHERE id = ?2",
+                            rusqlite::params![text, clip_id],
+                        );
+                        match result {
+                            Ok(_) => tracing::info!(
+                                "OCR clip {}: {} chars extracted",
+                                clip_id,
+                                text.len()
+                            ),
+                            Err(e) => warn!("OCR write-back failed for clip {}: {}", clip_id, e),
+                        }
+                    }
+                    Err(e) => warn!("OCR write-back: failed to open DB: {}", e),
+                }
+            }
+            Ok(None) => {
+                tracing::debug!("OCR clip {}: no text found", clip_id);
+            }
+            Err(e) => warn!("OCR clip {}: error: {}", clip_id, e),
+        }
+    });
 }
 
 /// Existing text capture flow. Kept as a private helper so tick stays
@@ -222,6 +280,7 @@ fn tick_text(
             window_title: ctx.window_title.clone(),
         })?;
         info!("clip captured: {} from {:?}", cls.primary_kind, ctx.front_app);
+        fire_recipes(opts, store, id);
 
         if let Some(mirror) = &opts.vault_mirror {
             let item = crate::core::vault::MirrorItem {
@@ -243,6 +302,20 @@ fn tick_text(
 
     store.prune_oldest(opts.max_items)?;
     Ok(())
+}
+
+/// Dispatch a newly-ingested clip to the recipe engine (if configured).
+///
+/// Runs synchronously on the watcher thread. Recipe actions that do I/O
+/// (webhook POST, vault append) have individual timeouts / best-effort
+/// semantics so a slow external endpoint doesn't permanently stall the
+/// poll loop — it delays at most one tick.
+fn fire_recipes(opts: &WatcherOptions, store: &Store, clip_id: i64) {
+    let Some(engine_arc) = &opts.recipe_engine else { return };
+    match engine_arc.lock() {
+        Ok(engine) => engine.handle_clip(store, clip_id),
+        Err(_) => warn!("fire_recipes: recipe engine mutex poisoned, skipping"),
+    }
 }
 
 /// Vault-mirror hook for image and file clips. Reads the just-inserted

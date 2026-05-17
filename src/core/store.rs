@@ -60,6 +60,7 @@ pub struct Item {
     pub text: Option<String>,
     pub preview: String,
     pub length: i64,
+    pub byte_length: i64,
     pub primary_kind: String,
     pub kinds: Vec<String>,
     pub tags: Vec<String>,
@@ -184,6 +185,16 @@ impl Store {
         Ok(id)
     }
 
+    /// Write back OCR text for an image clip. Called after the clip row is
+    /// committed so the schema trigger updates clips_fts automatically.
+    pub fn set_ocr_text(&self, clip_id: i64, ocr_text: &str) -> Result<()> {
+        self.conn.execute(
+            "UPDATE clips SET ocr_text = ?1 WHERE id = ?2",
+            params![ocr_text, clip_id],
+        )?;
+        Ok(())
+    }
+
     pub fn add_files_clip(&self, input: FilesClipInput) -> Result<Vec<i64>> {
         use crate::core::blobs;
         let mut ids = Vec::with_capacity(input.paths.len());
@@ -234,22 +245,23 @@ impl Store {
 
     pub fn get_item(&self, id: i64) -> Result<Option<Item>> {
         let row = self.conn.query_row(
-            "SELECT id, uuid, text, preview, length, primary_kind, source_app, window_title,
+            "SELECT id, uuid, text, preview, length, byte_length, primary_kind, source_app, window_title,
                     first_copied_at, last_copied_at, copy_count, paste_count, is_pinned,
                     payload_kind, blob_path, blob_size_bytes, mime_type
              FROM clips WHERE id = ?1",
             params![id],
             |r| Ok(Item {
                 id: r.get(0)?, uuid: r.get(1)?, text: r.get(2)?, preview: r.get(3)?,
-                length: r.get(4)?, primary_kind: r.get(5)?, kinds: vec![], tags: vec![],
-                source_app: r.get(6)?, window_title: r.get(7)?,
-                first_copied_at: r.get(8)?, last_copied_at: r.get(9)?,
-                copy_count: r.get(10)?, paste_count: r.get(11)?,
-                is_pinned: r.get::<_, i64>(12)? == 1,
-                payload_kind: r.get(13)?,
-                blob_path: r.get(14)?,
-                blob_size_bytes: r.get(15)?,
-                mime_type: r.get(16)?,
+                length: r.get(4)?, byte_length: r.get(5)?, primary_kind: r.get(6)?,
+                kinds: vec![], tags: vec![],
+                source_app: r.get(7)?, window_title: r.get(8)?,
+                first_copied_at: r.get(9)?, last_copied_at: r.get(10)?,
+                copy_count: r.get(11)?, paste_count: r.get(12)?,
+                is_pinned: r.get::<_, i64>(13)? == 1,
+                payload_kind: r.get(14)?,
+                blob_path: r.get(15)?,
+                blob_size_bytes: r.get(16)?,
+                mime_type: r.get(17)?,
             }),
         ).optional()?;
         let Some(mut item) = row else { return Ok(None) };
@@ -327,7 +339,7 @@ impl Store {
     pub fn list_with(&self, kind: Option<&str>, limit: i64, offset: i64, pinned_only: bool) -> Result<Vec<Item>> {
         let sql = match (kind.is_some(), pinned_only) {
             (true, true) => {
-                "SELECT id, uuid, text, preview, length, primary_kind, source_app, window_title,
+                "SELECT id, uuid, text, preview, length, byte_length, primary_kind, source_app, window_title,
                         first_copied_at, last_copied_at, copy_count, paste_count, is_pinned,
                         payload_kind, blob_path, blob_size_bytes, mime_type
                  FROM clips WHERE is_pinned = 1
@@ -335,21 +347,21 @@ impl Store {
                  ORDER BY last_copied_at DESC LIMIT ?2 OFFSET ?3"
             }
             (true, false) => {
-                "SELECT id, uuid, text, preview, length, primary_kind, source_app, window_title,
+                "SELECT id, uuid, text, preview, length, byte_length, primary_kind, source_app, window_title,
                         first_copied_at, last_copied_at, copy_count, paste_count, is_pinned,
                         payload_kind, blob_path, blob_size_bytes, mime_type
                  FROM clips WHERE id IN (SELECT clip_id FROM kinds WHERE kind = ?1)
                  ORDER BY is_pinned DESC, last_copied_at DESC LIMIT ?2 OFFSET ?3"
             }
             (false, true) => {
-                "SELECT id, uuid, text, preview, length, primary_kind, source_app, window_title,
+                "SELECT id, uuid, text, preview, length, byte_length, primary_kind, source_app, window_title,
                         first_copied_at, last_copied_at, copy_count, paste_count, is_pinned,
                         payload_kind, blob_path, blob_size_bytes, mime_type
                  FROM clips WHERE is_pinned = 1
                  ORDER BY last_copied_at DESC LIMIT ?1 OFFSET ?2"
             }
             (false, false) => {
-                "SELECT id, uuid, text, preview, length, primary_kind, source_app, window_title,
+                "SELECT id, uuid, text, preview, length, byte_length, primary_kind, source_app, window_title,
                         first_copied_at, last_copied_at, copy_count, paste_count, is_pinned,
                         payload_kind, blob_path, blob_size_bytes, mime_type
                  FROM clips ORDER BY is_pinned DESC, last_copied_at DESC LIMIT ?1 OFFSET ?2"
@@ -379,8 +391,9 @@ impl Store {
             .join(" ");
         if sanitized.is_empty() { return Ok(Vec::new()); }
         let mut stmt = self.conn.prepare(
-            "SELECT clips.id, clips.uuid, clips.text, clips.preview, clips.length, clips.primary_kind,
-                    clips.source_app, clips.window_title, clips.first_copied_at, clips.last_copied_at,
+            "SELECT clips.id, clips.uuid, clips.text, clips.preview, clips.length, clips.byte_length,
+                    clips.primary_kind, clips.source_app, clips.window_title,
+                    clips.first_copied_at, clips.last_copied_at,
                     clips.copy_count, clips.paste_count, clips.is_pinned,
                     clips.payload_kind, clips.blob_path, clips.blob_size_bytes, clips.mime_type,
                     bm25(clips_fts) AS rank
@@ -499,15 +512,16 @@ pub struct Stats { pub count: i64, pub oldest: Option<i64>, pub newest: Option<i
 fn row_to_item(r: &rusqlite::Row) -> rusqlite::Result<Item> {
     Ok(Item {
         id: r.get(0)?, uuid: r.get(1)?, text: r.get(2)?, preview: r.get(3)?,
-        length: r.get(4)?, primary_kind: r.get(5)?, kinds: vec![], tags: vec![],
-        source_app: r.get(6)?, window_title: r.get(7)?,
-        first_copied_at: r.get(8)?, last_copied_at: r.get(9)?,
-        copy_count: r.get(10)?, paste_count: r.get(11)?,
-        is_pinned: r.get::<_, i64>(12)? == 1,
-        payload_kind: r.get(13)?,
-        blob_path: r.get(14)?,
-        blob_size_bytes: r.get(15)?,
-        mime_type: r.get(16)?,
+        length: r.get(4)?, byte_length: r.get(5)?, primary_kind: r.get(6)?,
+        kinds: vec![], tags: vec![],
+        source_app: r.get(7)?, window_title: r.get(8)?,
+        first_copied_at: r.get(9)?, last_copied_at: r.get(10)?,
+        copy_count: r.get(11)?, paste_count: r.get(12)?,
+        is_pinned: r.get::<_, i64>(13)? == 1,
+        payload_kind: r.get(14)?,
+        blob_path: r.get(15)?,
+        blob_size_bytes: r.get(16)?,
+        mime_type: r.get(17)?,
     })
 }
 fn row_to_item_with_rank(r: &rusqlite::Row) -> rusqlite::Result<Item> { row_to_item(r) }
