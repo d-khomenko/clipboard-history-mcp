@@ -41,6 +41,15 @@ async fn main() -> Result<()> {
         Cmd::Vault { sub, id } => clipboard_history_mcp::cli::vault::vault(&sub, id),
         Cmd::MigrateV2 => clipboard_history_mcp::cli::migrate_v2::migrate_v2(),
         Cmd::CleanLegacy { yes } => clipboard_history_mcp::cli::clean_legacy::clean_legacy(yes),
+        Cmd::Copy { id } => clipboard_history_mcp::cli::copy_cmd::run(id),
+        Cmd::Pin { id } => clipboard_history_mcp::cli::pin_cmd::run(id),
+        Cmd::Unpin { id } => clipboard_history_mcp::cli::unpin_cmd::run(id),
+        Cmd::Delete { id } => clipboard_history_mcp::cli::delete_cmd::run(id),
+        Cmd::Clear { scope, yes } => clipboard_history_mcp::cli::clear_cmd::run(&scope, yes),
+        Cmd::UnlockSecret { id, reason } => {
+            clipboard_history_mcp::cli::unlock_secret_cmd::run(id, &reason)
+        }
+        Cmd::Audit(args) => clipboard_history_mcp::cli::audit::run(args),
     }
 }
 

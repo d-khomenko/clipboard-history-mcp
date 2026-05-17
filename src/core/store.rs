@@ -265,8 +265,59 @@ impl Store {
         ).optional()?;
         let (ct, nonce) = row.ok_or_else(|| anyhow!("no secret for clip {}", id))?;
         let value = decrypt(&ct, &nonce, &self.master_key)?;
+        let now = now_ms();
         self.conn.execute("UPDATE secrets SET unlock_count = unlock_count + 1 WHERE clip_id = ?1", params![id])?;
+        self.conn.execute("UPDATE secrets SET last_revealed_at = ?1 WHERE clip_id = ?2", params![now, id])?;
         Ok(value)
+    }
+
+    /// Return the `last_revealed_at` timestamp (unix ms) for a secret, or `None`
+    /// if the secret has never been revealed or does not exist.
+    pub fn last_revealed_at(&self, clip_id: i64) -> Result<Option<i64>> {
+        // Use optional() in case the secrets row doesn't exist at all,
+        // and get::<_, Option<i64>> to handle a NULL last_revealed_at.
+        let result = self.conn.query_row(
+            "SELECT last_revealed_at FROM secrets WHERE clip_id = ?1",
+            params![clip_id],
+            |r| r.get::<_, Option<i64>>(0),
+        ).optional()?;
+        // result: Option<Option<i64>> — flatten: None if row missing, inner for NULL/value
+        Ok(result.flatten())
+    }
+
+    /// Write a single audit entry. Best-effort — logs and swallows on DB error
+    /// (audit must never break a read).
+    pub fn write_audit(&self, actor: &str, verb: &str, tool: &str,
+                       target_clip_id: Option<i64>, detail: Option<&str>) {
+        let ts = now_ms();
+        let result = self.conn.execute(
+            "INSERT INTO audit_log (ts, actor, verb, tool, target_clip_id, detail)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![ts, actor, verb, tool, target_clip_id, detail],
+        );
+        if let Err(e) = result {
+            tracing::warn!("audit log write failed: {}", e);
+        }
+    }
+
+    /// Return the most recent audit entries. `since_secs` filters to the last N seconds.
+    pub fn audit_recent(&self, limit: i64, since_secs: Option<i64>) -> Result<Vec<AuditEntry>> {
+        let now = now_ms();
+        let cutoff = since_secs.map(|s| now - s * 1000).unwrap_or(0);
+        let mut stmt = self.conn.prepare(
+            "SELECT id, ts, actor, verb, tool, target_clip_id, detail
+             FROM audit_log
+             WHERE ts >= ?1
+             ORDER BY ts DESC
+             LIMIT ?2"
+        )?;
+        let rows: Vec<AuditEntry> = stmt.query_map(params![cutoff, limit], |r| {
+            Ok(AuditEntry {
+                id: r.get(0)?, ts: r.get(1)?, actor: r.get(2)?, verb: r.get(3)?,
+                tool: r.get(4)?, target_clip_id: r.get(5)?, detail: r.get(6)?,
+            })
+        })?.collect::<Result<_, _>>()?;
+        Ok(rows)
     }
 
     pub fn list(&self, limit: i64) -> Result<Vec<Item>> {
@@ -432,6 +483,17 @@ impl Store {
 }
 
 #[derive(Debug, serde::Serialize)]
+pub struct AuditEntry {
+    pub id: i64,
+    pub ts: i64,
+    pub actor: String,
+    pub verb: String,
+    pub tool: String,
+    pub target_clip_id: Option<i64>,
+    pub detail: Option<String>,
+}
+
+#[derive(Debug, serde::Serialize)]
 pub struct Stats { pub count: i64, pub oldest: Option<i64>, pub newest: Option<i64> }
 
 fn row_to_item(r: &rusqlite::Row) -> rusqlite::Result<Item> {
@@ -461,3 +523,4 @@ fn now_ms() -> i64 {
 }
 
 use rusqlite::OptionalExtension;
+
