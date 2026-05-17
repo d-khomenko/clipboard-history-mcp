@@ -1,0 +1,13 @@
+{
+  "id": "notify-large-clips",
+  "name": "Notify on clips larger than 1 MB",
+  "enabled": true,
+  "trigger": {
+    "min_byte_length": 1048576
+  },
+  "action": {
+    "type": "notify",
+    "title": "Large clipboard item",
+    "body": "A clip over 1 MB was captured from {source_app}."
+  }
+}
