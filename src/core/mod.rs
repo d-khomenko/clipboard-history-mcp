@@ -1,8 +1,11 @@
 pub mod blobs;
 pub mod crypto;
 pub mod db;
+pub mod ocr;
 pub mod pasteboard;
 pub mod paths;
+pub mod recipe;
+pub mod recipe_engine;
 pub mod secrets;
 pub mod store;
 pub mod types;

@@ -1,0 +1,13 @@
+{
+  "id": "webhook-stripe-keys",
+  "name": "POST detected Stripe secrets to webhook",
+  "enabled": false,
+  "trigger": {
+    "primary_kind_starts_with": "secret:"
+  },
+  "action": {
+    "type": "webhook_post",
+    "url": "https://YOUR_WEBHOOK_URL_HERE/secrets",
+    "include_text": false
+  }
+}

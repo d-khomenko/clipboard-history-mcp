@@ -1,0 +1,13 @@
+{
+  "id": "obsidian-append-urls",
+  "name": "Append URL clips to daily Obsidian note",
+  "enabled": false,
+  "trigger": {
+    "kind": "url"
+  },
+  "action": {
+    "type": "vault_append",
+    "vault_path": "/Users/YOUR_USERNAME/Documents/Obsidian/MyVault/clips",
+    "daily": true
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "id": "tag-code-from-slack",
+  "name": "Tag code clips from Slack",
+  "enabled": true,
+  "trigger": {
+    "kind": "code",
+    "source_app": "Slack"
+  },
+  "action": {
+    "type": "tag",
+    "tag": "from-slack"
+  }
+}

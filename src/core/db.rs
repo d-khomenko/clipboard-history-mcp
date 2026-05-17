@@ -5,6 +5,7 @@ use std::path::Path;
 const SCHEMA_V1: &str = include_str!("schema_v1.sql");
 const SCHEMA_V2: &str = include_str!("schema_v2.sql");
 const SCHEMA_V3: &str = include_str!("schema_v3.sql");
+const SCHEMA_V4: &str = include_str!("schema_v4.sql");
 
 pub fn open_db<P: AsRef<Path>>(path: P) -> Result<Connection> {
     if let Some(parent) = path.as_ref().parent() {
@@ -29,6 +30,9 @@ pub fn open_db<P: AsRef<Path>>(path: P) -> Result<Connection> {
     }
     if current < 3 {
         conn.execute_batch(SCHEMA_V3)?;
+    }
+    if current < 4 {
+        conn.execute_batch(SCHEMA_V4)?;
     }
     Ok(conn)
 }
@@ -70,12 +74,12 @@ mod tests {
             .unwrap();
         }
 
-        // 2. Re-open: migration ladder should run v2 and v3 (current max).
+        // 2. Re-open: migration ladder should run v2, v3, and v4 (current max).
         let conn = open_db(&db_path).unwrap();
         let version: String = conn
             .query_row("SELECT value FROM meta WHERE key = 'schema_version'", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(version, "3");
+        assert_eq!(version, "4");
 
         // 3. Existing row survives, with default payload_kind = 'text'.
         let (text, payload_kind, blob_path): (String, String, Option<String>) = conn
@@ -109,12 +113,12 @@ mod tests {
             .unwrap();
         }
 
-        // 2. Re-open: migration ladder should run v3.
+        // 2. Re-open: migration ladder should run v3 and v4.
         let conn = open_db(&db_path).unwrap();
         let version: String = conn
             .query_row("SELECT value FROM meta WHERE key = 'schema_version'", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(version, "3");
+        assert_eq!(version, "4");
 
         // 3. Old row survives.
         let text: String = conn
@@ -137,6 +141,60 @@ mod tests {
             )
             .unwrap();
         assert_eq!(col_exists, 1, "secrets.last_revealed_at column should exist after v3 migration");
+    }
+
+    #[test]
+    fn migrates_v3_to_v4_preserves_existing_rows() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let db_path = tmp.path().join("t.db");
+
+        // 1. Build a v3 DB directly (v1 + v2 + v3), insert a clip row.
+        {
+            let conn = rusqlite::Connection::open(&db_path).unwrap();
+            conn.execute_batch(SCHEMA_V1).unwrap();
+            conn.execute_batch(SCHEMA_V2).unwrap();
+            conn.execute_batch(SCHEMA_V3).unwrap();
+            conn.execute(
+                "INSERT INTO clips (uuid, text, preview, length, byte_length, hash, primary_kind,
+                                    first_copied_at, last_copied_at)
+                 VALUES ('u3', 'ocr test', 'ocr test', 8, 8, 'ghi', 'text', 3, 3)",
+                [],
+            )
+            .unwrap();
+        }
+
+        // 2. Re-open: migration ladder should run v4.
+        let conn = open_db(&db_path).unwrap();
+        let version: String = conn
+            .query_row("SELECT value FROM meta WHERE key = 'schema_version'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(version, "4");
+
+        // 3. Old row survives.
+        let text: String = conn
+            .query_row("SELECT text FROM clips WHERE uuid = 'u3'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(text, "ocr test");
+
+        // 4. ocr_text column exists and is NULL for pre-existing rows.
+        let ocr: Option<String> = conn
+            .query_row(
+                "SELECT ocr_text FROM clips WHERE uuid = 'u3'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(ocr.is_none(), "pre-existing row should have NULL ocr_text");
+
+        // 5. FTS5 table was rebuilt and contains the existing row.
+        let fts_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM clips_fts WHERE clips_fts MATCH 'ocr'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(fts_count, 1, "existing row should appear in rebuilt clips_fts");
     }
 
     #[test]

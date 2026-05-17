@@ -121,6 +121,18 @@ async fn run_daemon() -> Result<()> {
                 };
                 clipboard_history_mcp::core::vault::VaultMirror::new(resolved)
             }),
+        recipe_engine: {
+            let recipes_dir = clipboard_history_mcp::core::paths::data_dir().join("recipes");
+            match clipboard_history_mcp::core::recipe_engine::RecipeEngine::load(recipes_dir) {
+                Ok(engine) => {
+                    Some(std::sync::Arc::new(std::sync::Mutex::new(engine)))
+                }
+                Err(e) => {
+                    tracing::warn!("failed to load recipe engine: {}", e);
+                    None
+                }
+            }
+        },
     };
 
     tracing::info!(
