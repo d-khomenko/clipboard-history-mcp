@@ -19,6 +19,7 @@ fn item_serialisation_includes_payload_fields() {
         text: None,
         preview: "p".into(),
         length: 0,
+        byte_length: 123,
         primary_kind: "image".into(),
         kinds: vec![],
         tags: vec![],

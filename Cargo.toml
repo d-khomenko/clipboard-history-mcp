@@ -48,6 +48,10 @@ clap                       = { version = "4.6", features = ["derive"] }
 tracing                    = "0.1"
 tracing-subscriber         = { version = "0.3", features = ["env-filter"] }
 
+# Recipes / workflows
+ureq                       = { version = "3", features = ["json"] }
+notify                     = "8"
+
 # Utilities
 anyhow                     = "1"
 base64                     = "0.22"
