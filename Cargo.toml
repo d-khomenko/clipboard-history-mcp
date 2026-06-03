@@ -28,7 +28,7 @@ arboard                    = "3"
 keyring                    = "4"
 keyring-core               = "1"
 directories-next           = "2"
-active-win-pos-rs          = "0.10"
+active-win-pos-rs          = "0.11"
 
 # Storage & crypto
 rusqlite                   = { version = "0.39", features = ["bundled"] }
