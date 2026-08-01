@@ -8,8 +8,8 @@
 //! database survives a `data_dir` move.
 
 use anyhow::{Context, Result};
-use sha2::{Digest, Sha256};
-use std::io::Write;
+use rust_kit_atomic_file::atomic_write;
+use rust_kit_sha256::Sha256Digest;
 use std::path::PathBuf;
 
 /// Root directory for all clip blobs under `data_dir`.
@@ -19,9 +19,7 @@ pub fn blobs_dir() -> PathBuf {
 
 /// Compute the sha256 hex digest of `bytes`.
 pub fn sha256_hex(bytes: &[u8]) -> String {
-    let mut h = Sha256::new();
-    h.update(bytes);
-    hex::encode(h.finalize())
+    Sha256Digest::hash(bytes).to_string()
 }
 
 /// Build the relative path that goes into `clips.blob_path`.
@@ -57,18 +55,7 @@ pub fn write(bytes: &[u8], extension: &str) -> Result<(String, String)> {
     if let Some(parent) = abs.parent() {
         std::fs::create_dir_all(parent).context("create blob parent dir")?;
     }
-    let pid = std::process::id();
-    let file_name = abs
-        .file_name()
-        .context("blob path missing file name component")?
-        .to_string_lossy();
-    let tmp = abs.with_file_name(format!("{}.{}.tmp", file_name, pid));
-    {
-        let mut f = std::fs::File::create(&tmp).context("create blob tmp")?;
-        f.write_all(bytes).context("write blob bytes")?;
-        f.sync_all().context("fsync blob")?;
-    }
-    std::fs::rename(&tmp, &abs).context("rename blob into place")?;
+    atomic_write(&abs, bytes).context("write blob atomically")?;
     Ok((rel, hash))
 }
 

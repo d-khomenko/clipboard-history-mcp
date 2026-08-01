@@ -7,6 +7,7 @@
 
 use anyhow::Result;
 use chrono::{DateTime, Local};
+use rust_kit_atomic_file::AtomicWriteOptions;
 use std::path::{Path, PathBuf};
 
 /// One captured clip, in the shape the vault writer needs.
@@ -200,22 +201,10 @@ fn format_body(item: &MirrorItem<'_>, blob_filename: Option<&str>) -> String {
 }
 
 fn atomic_write(path: &Path, contents: &str) -> Result<()> {
-    use std::io::Write;
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    let pid = std::process::id();
-    let tmp = path.with_file_name(format!(
-        "{}.{}.tmp",
-        path.file_name().and_then(|s| s.to_str()).unwrap_or("write"),
-        pid
-    ));
-    {
-        let mut f = std::fs::File::create(&tmp)?;
-        f.write_all(contents.as_bytes())?;
-        f.sync_all()?;
-    }
-    std::fs::rename(&tmp, path)?;
+    let options = AtomicWriteOptions::new().create_parent_dirs(true);
+    #[cfg(unix)]
+    let options = options.unix_mode(0o644);
+    options.write(path, contents.as_bytes())?;
     Ok(())
 }
 

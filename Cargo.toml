@@ -55,11 +55,11 @@ notify                     = "8"
 # Utilities
 anyhow                     = "1"
 base64                     = "0.22"
+rust-kit-atomic-file       = { git = "https://github.com/d-khomenko/rust_kits.git", tag = "v0.1.0" }
+rust-kit-sha256            = { git = "https://github.com/d-khomenko/rust_kits.git", tag = "v0.1.0" }
 thiserror                  = "2"
 schemars                   = "1.2"
-sha2                       = "0.11"
 uuid                       = { version = "1", features = ["v4"] }
-hex                        = "0.4"
 url                        = "2.5"
 chrono                     = { version = "0.4", default-features = false, features = ["clock", "std"] }
 libc                       = "0.2"

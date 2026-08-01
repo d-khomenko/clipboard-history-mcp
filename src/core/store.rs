@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use rusqlite::{params, Connection};
-use sha2::{Digest, Sha256};
+use rust_kit_sha256::Sha256Digest;
 use std::path::Path;
 use uuid::Uuid;
 
@@ -527,9 +527,7 @@ fn row_to_item(r: &rusqlite::Row) -> rusqlite::Result<Item> {
 fn row_to_item_with_rank(r: &rusqlite::Row) -> rusqlite::Result<Item> { row_to_item(r) }
 
 fn sha256_hex(text: &str) -> String {
-    let mut h = Sha256::new();
-    h.update(text.as_bytes());
-    hex::encode(h.finalize())
+    Sha256Digest::hash(text.as_bytes()).to_string()
 }
 fn now_ms() -> i64 {
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -537,4 +535,3 @@ fn now_ms() -> i64 {
 }
 
 use rusqlite::OptionalExtension;
-
