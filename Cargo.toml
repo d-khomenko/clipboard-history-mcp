@@ -31,7 +31,7 @@ directories-next           = "2"
 active-win-pos-rs          = "0.10"
 
 # Storage & crypto
-rusqlite                   = { version = "0.39", features = ["bundled"] }
+rusqlite                   = { version = "0.40", features = ["bundled"] }
 aes-gcm                    = "0.10"
 argon2                     = "0.5"
 rand                       = "0.10"
